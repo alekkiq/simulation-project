@@ -8,7 +8,7 @@ public class Clock {
 	private static Clock instance;
 	
 	private Clock(){
-		clock = 0;
+		clock = 0.0;
 	}
 	
 	public static Clock getInstance(){

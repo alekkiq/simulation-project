@@ -8,5 +8,12 @@ import simu.framework.IEventType;
  * TODO: This must be adapted to the actual simulator
  */
 public enum EventType implements IEventType {
-	ARR1, DEP1, DEP2, DEP3;
+	ARRIVAL,
+	RECEPTION_START,
+	RECEPTION_END,
+	MECHANIC_START,
+	MECHANIC_END,
+	WASH_START,
+	WASH_END,
+	DEPARTURE
 }
