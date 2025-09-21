@@ -4,6 +4,8 @@ import eduni.distributions.ContinuousGenerator;
 import simu.framework.*;
 
 // import java.time.Clock;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedList;
 import java.util.PriorityQueue;
 
@@ -26,10 +28,26 @@ public class ServicePoint {
 		public final Customer customer;
 		public final double serviceTime;
 		public final double endTime;
+		public final int serverId;
 
-		private StartInfo(Customer c, double serviceTime, double endTime) {
+		private StartInfo(Customer c, double serviceTime, double endTime, int serverId) {
 			this.customer = c;
 			this.serviceTime = serviceTime;
+			this.endTime = endTime;
+			this.serverId = serverId;
+		}
+	}
+
+	public static class EndInfo {
+		public final Customer customer;
+		public final int serverId;
+		public final double startTime;
+		public final double endTime;
+
+		private EndInfo(Customer customer, int serverId, double startTime, double endTime) {
+			this.customer = customer;
+			this.serverId = serverId;
+			this.startTime = startTime;
 			this.endTime = endTime;
 		}
 	}
@@ -38,11 +56,13 @@ public class ServicePoint {
 		final Customer customer;
 		final double startTime;
 		final double endTime;
+		final int serverId;
 
-		InService(Customer customer, double startTime, double endTime) {
+		InService(Customer customer, double startTime, double endTime, int serverId) {
 			this.customer = customer;
 			this.startTime = startTime;
 			this.endTime = endTime;
+			this.serverId = serverId;
 		}
 		@Override
 		public int compareTo(InService o) {
@@ -50,107 +70,186 @@ public class ServicePoint {
 		}
 	}
 
-	private LinkedList<Customer> queue = new LinkedList<>(); // Data Structure used
+	private static class QItem {
+		final Customer customer;
+		final double enqueuedAt;
+
+		QItem(Customer customer, double enqueuedAt) {
+			this.customer = customer;
+			this.enqueuedAt = enqueuedAt;
+		}
+	}
+
+	// per server queues
+	private LinkedList<QItem>[] queues;
+
+	// per server generators
+	private ContinuousGenerator[] generators;
+
+	private LinkedList<QItem> queue = new LinkedList<>(); // Data Structure used
 	private ContinuousGenerator generator;
 	private EventList eventList;
 	private EventType eventTypeScheduled;
 
-	private final int capacity;
+	private int capacity;
 	private final PriorityQueue<InService> running = new PriorityQueue<>();
+	private final Deque<Integer> freeServers = new ArrayDeque<>();
 
 	// stats
-	private int busy = 0;
-	private double lastBusyChange = 0.0;
 	private int served = 0;
 	private double busyTime = 0.0;
-	private double lastStart = 0.0;
+	private double totalWaitTime = 0.0;
+
+	// per-server stats
+	private double[] perServerBusyTime;
+	private int[] perServerServed;
 
 
+	// constructors
 	public ServicePoint(ContinuousGenerator gen, EventList eventList, EventType type) {
 		this(gen, eventList, type, 1);
 	}
+
+	public ServicePoint(ContinuousGenerator generator, EventList eventList, EventType type, int capacity) {
+		this(makeUniformGenerators(generator, Math.max(1, capacity)), eventList, type, Math.max(1, capacity));
+	}
+
+	public ServicePoint(ContinuousGenerator[] perServerGenerators, EventList eventList, EventType type) {
+		this(perServerGenerators, eventList, type, perServerGenerators != null ? perServerGenerators.length : 1);
+	}
+
 	/**
 	 * Create the service point with a waiting queue.
 	 *
-	 * @param generator Random number generator for service time simulation
+	 * @param perServerGenerators Random number generators for customer service time simulation, one per server
 	 * @param eventList Simulator event list, needed for the insertion of service ready event
 	 * @param type Event type for the service end event
+	 * @param capacity Number of parallel servers (1for single server)
 	 */
-	public ServicePoint(ContinuousGenerator generator, EventList eventList, EventType type, int capacity) {
+	private ServicePoint(ContinuousGenerator[] perServerGenerators, EventList eventList, EventType type, int capacity) {
 		this.eventList = eventList;
-		this.generator = generator;
 		this.eventTypeScheduled = type;
 		this.capacity = Math.max(1, capacity);
-		this.lastBusyChange = 0.0;
+
+		this.generators = (perServerGenerators != null && perServerGenerators.length == this.capacity)
+				? perServerGenerators.clone()
+				: makeUniformGenerators(perServerGenerators != null && perServerGenerators.length > 0
+				? perServerGenerators[0] : null, this.capacity);
+
+		// queues per server
+		this.queues = new LinkedList[this.capacity];
+		for (int i = 0; i < this.capacity; i++) {
+			this.queues[i] = new LinkedList<>();
+		}
+
+		this.perServerBusyTime = new double[this.capacity];
+		this.perServerServed = new int[this.capacity];
+
+		for (int i = 0; i < this.capacity; i++) {
+			this.freeServers.addLast(i);
+			this.perServerBusyTime[i] = 0.0;
+			this.perServerServed[i] = 0;
+		}
+	}
+
+	// static methods
+	private static ContinuousGenerator[] makeUniformGenerators(ContinuousGenerator gen, int capacity) {
+		ContinuousGenerator[] arr = new ContinuousGenerator[capacity];
+		for (int i = 0; i < capacity; i++) arr[i] = gen;
+		return arr;
+	}
+
+	private static double bump(double now) {
+		double next = Math.nextUp(now);
+		return Double.isFinite(next) ? next : now + 1e-9;
+	}
+
+	private static double future(double candidate, double now) {
+		return (!Double.isFinite(candidate) || candidate <= now) ? bump(now) : candidate;
+	}
+
+	/**
+	 * Choose a server to enqueue to: the one with the shortest queue. For multiserver
+	 * service points only.
+	 */
+	private int selectServerForEnqueue() {
+		int best = 0;
+		int bestSize = this.queues[0].size();
+		for (int i = 1; i < this.capacity; i++) {
+			int size = this.queues[i].size();
+			if (size < bestSize) {
+				best = i;
+				bestSize = size;
+			}
+		}
+
+		return best;
 	}
 
 	/**
 	 * Try to start a new service, if the service point is not busy and there is customers on the queue
-	 * @param now
+	 * @param now Current time
 	 * @return StartInfo if a new service was started, null otherwise
 	 */
 	public synchronized StartInfo tryStart(double now) {
-		if (this.busy >= this.capacity) return null;
-		if (this.queue.isEmpty()) return null;
+		if (this.freeServers.isEmpty()) return null;
 
-		// reserve capacity and dequeue BEFORE sampling
-		this.busy++;
-		Customer c = this.queue.removeFirst();
+		int trials = availableSlots();
+		int chosenSid = -1;
 
-		double st = this.generator.sample();
+		// find a free server with a waiting queue
+		for (int i = 0; i < trials; i++) {
+			int sid = this.freeServers.removeFirst();
+			if (!this.queues[sid].isEmpty()) {
+				chosenSid = sid;
+				break;
+			} else {
+				this.freeServers.addLast(sid);
+			}
+		}
+
+		if (chosenSid < 0) return null;
+
+		QItem qi = this.queues[chosenSid].removeFirst();
+		Customer c = qi.customer;
+
+		double wait = Math.max(0.0, now - qi.enqueuedAt);
+		this.totalWaitTime += wait;
+
+		double st = (this.generators[chosenSid] != null) ? this.generators[chosenSid].sample() : 0.0;
 		if (!Double.isFinite(st) || st <= 0.0) {
-			Trace.out(Trace.Level.WAR,
-					"Invalid service time " + st + " from " + this.generator.getClass().getSimpleName()
-							+ " at " + now + "; clamping to epsilon.");
-			st = Math.max(Math.ulp(now), 1e-6);
+			st = Math.max(1e-6, Math.ulp(now));
+			Trace.out(Trace.Level.WAR, "Invalid service time " + (st) + " from generator; clamping.");
 		}
 
-		double end = now + st;
-		if (!Double.isFinite(end) || end <= now) {
-			end = Math.nextUp(now);
-			st = end - now;
-		}
+		double end = future(now + st, now);
+		this.running.add(new InService(c, now, end, chosenSid));
 
-		// record running service so finishService can find it
-		this.running.add(new InService(c, now, end));
+		this.eventList.add(new Event(this.eventTypeScheduled, end));
 
-		return new StartInfo(c, st, end);
-	}
-
-	/**
-	 * Begins a new service, customer is on the queue during the service
-	 * Inserts a new event to the event list when the service should be ready.
-	 */
-	@Deprecated
-	public synchronized void beginService() {		// Begins a new service, customer is on the queue during the service
-		double now = Clock.getInstance().getClock();
-		StartInfo si = tryStart(now);
-		if (si == null) return;
-
-		Trace.out(Trace.Level.INFO,
-				"Starting a new service for the customer #" + si.customer.getId() +
-						" (service=" + si.serviceTime + ", end=" + si.endTime + ")");
-		eventList.add(new Event(this.eventTypeScheduled, si.endTime)); // schedule once
+		return new StartInfo(c, st, end, chosenSid);
 	}
 
 	/**
 	 * Finish the current service, customer is removed from the service point
-	 * @param now
+	 * @param now Current time
 	 * @return Customer who has been serviced, null if no customer was in service
 	 */
-	public synchronized Customer finishService(double now) {
+	public synchronized EndInfo finishService(double now) {
 		InService top = this.running.peek();
-		if (top == null || (top.endTime - now) > 1e-9) {
-			return null;
-		}
+
+		if (top == null || (top.endTime - now) > 1e-9) return null;
 
 		this.running.poll();
-		if (this.busy > 0) this.busy--; // release capacity
-
 		this.served++;
-		// accumulate actual service time
-		this.busyTime += Math.max(0.0, top.endTime - top.startTime);
-		return top.customer;
+
+		double sv = Math.max(0.0, top.endTime - top.startTime);
+		this.busyTime += sv;
+		this.perServerBusyTime[top.serverId] += sv;
+		this.perServerServed[top.serverId]++;
+
+		this.freeServers.addLast(top.serverId);
+		return new EndInfo(top.customer, top.serverId, top.startTime, top.endTime);
 	}
 
 	/**
@@ -159,7 +258,12 @@ public class ServicePoint {
 	 * @param a Customer to be queued
 	 */
 	public synchronized void addQueue(Customer a) {	// The first customer of the queue is always in service
-		this.queue.addLast(a);
+		int sid = selectServerForEnqueue();
+		this.queues[sid].addLast(new QItem(a, Clock.getInstance().getClock()));
+	}
+	public synchronized void addQueue(Customer a, int serverId) {
+		int sid = Math.max(0, Math.min(serverId, this.capacity - 1));
+		this.queues[sid].addLast(new QItem(a, Clock.getInstance().getClock()));
 	}
 
 	/**
@@ -169,7 +273,8 @@ public class ServicePoint {
 	 * @return Customer retrieved from the waiting queue
 	 */
 	public Customer removeQueue() {
-		return this.queue.poll();
+		QItem qi = this.queue.poll();
+		return qi != null ? qi.customer : null;
 	}
 
 	/**
@@ -186,7 +291,7 @@ public class ServicePoint {
 	 * @return logival value indicating queue status
 	 */
 	public synchronized boolean isOnQueue() {
-		return this.queue.size() != 0;
+		return !this.queue.isEmpty();
 	}
 
 	/** Get served customer count
@@ -214,6 +319,49 @@ public class ServicePoint {
 	 * @return current queue size
 	 */
 	public int queueSize() {
-		return this.queue.size();
+		int sum = 0;
+		for (LinkedList<QItem> q : this.queues) sum += q.size();
+		return sum;
+	}
+
+	/** Get the number of currently busy servers
+	 * @return number of currently busy servers
+	 */
+	public synchronized int availableSlots() {
+		return this.freeServers.size();
+	}
+
+	/** Get the time when the current service will end
+	 * @return time when the current service will end, or Double.POSITIVE_INFINITY if no service is ongoing
+	 */
+	public synchronized double nextEndTime() {
+		InService top = this.running.peek();
+		return top != null ? top.endTime : Double.POSITIVE_INFINITY;
+	}
+
+
+	// analytics
+	public double getAverageServiceTime() {
+		return this.served > 0 ? this.busyTime / this.served : 0.0;
+	}
+
+	public double getTotalWaitTime() {
+		return this.totalWaitTime;
+	}
+
+	public double getAverageWaitTime() {
+		return this.served > 0 ? this.totalWaitTime / this.served : 0.0;
+	}
+
+	public synchronized double[] getPerServerBusyTimeSnapshot() {
+		double[] copy = new double[this.perServerBusyTime.length];
+		System.arraycopy(this.perServerBusyTime, 0, copy, 0, copy.length);
+		return copy;
+	}
+
+	public synchronized int[] getPerServerServedSnapshot() {
+		int[] copy = new int[this.perServerServed.length];
+		System.arraycopy(this.perServerServed, 0, copy, 0, copy.length);
+		return copy;
 	}
 }
