@@ -27,6 +27,17 @@ public class ServicePoint {
 
 	// ---------- Nested types ----------
 
+
+	/**
+	 * Immutable DTO describing a service start decision.
+	 * - Created by {@link #tryStart(double)} when a customer is dequeued and assigned to a free server.
+	 * - Consumed by the engine to annotate the customer and for optional logging.
+	 * Semantics:
+	 * - `customer`: the customer entering service now.
+	 * - `serviceTime`: sampled duration assigned to this service instance.
+	 * - `endTime`: absolute time when the service will finish (and an end-event will fire).
+	 * - `serverId`: zero-based id of the server that took the customer.
+	 */
 	public static class StartInfo {
 		public final Customer customer;
 		public final double serviceTime;
@@ -41,6 +52,16 @@ public class ServicePoint {
 		}
 	}
 
+	/**
+	 * Immutable DTO describing a completed service.
+	 * - Created by {@link #finishService(double)} when the next finishing service is popped.
+	 * - Consumed by the engine to route the customer to the next stage and for logging.
+	 * Semantics:
+	 * - `customer`: the customer whose service just finished.
+	 * - `serverId`: zero-based id of the server that completed the service.
+	 * - `startTime`: absolute time when this service started.
+	 * - `endTime`: absolute time when this service finished.
+	 */
 	public static class EndInfo {
 		public final Customer customer;
 		public final int serverId;
@@ -55,6 +76,11 @@ public class ServicePoint {
 		}
 	}
 
+	/**
+	 * Internal heap element representing an in-progress service.
+	 * - Stored in a min-heap ordered by `endTime` so the next finish is always at the top.
+	 * - Not exposed outside; used to compute utilization and per-server stats.
+	 */
 	private static class InService implements Comparable<InService> {
 		final Customer customer;
 		final double startTime;
@@ -73,6 +99,11 @@ public class ServicePoint {
 		}
 	}
 
+	/**
+	 * Internal queue node with arrival timestamp at this service point.
+	 * - `enqueuedAt` is used to accumulate wait-time statistics.
+	 * - Each server has its own FIFO queue of `QItem`s.
+	 */
 	private static class QItem {
 		final Customer customer;
 		final double enqueuedAt;
