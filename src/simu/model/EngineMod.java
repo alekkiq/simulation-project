@@ -18,11 +18,10 @@ public class EngineMod extends Engine {
 
     // arrival process
     private final ArrivalProcess arrivals;
-
-    // generators
     private final Random rng;
 
-    // constructors
+    // ---------- Constructors ----------------
+
     public EngineMod() {
         this(1, 1); // amount of servers for mechanic and wash
     }
@@ -33,7 +32,7 @@ public class EngineMod extends Engine {
        ContinuousGenerator interArrivalGen = new Negexp(10, Integer.toUnsignedLong(this.rng.nextInt()));
        this.arrivals = new ArrivalProcess(interArrivalGen, this.eventList, EventType.ARRIVAL);
 
-        // TODO: parameterization
+        // TODO: parameterization to distributions
         ContinuousGenerator recGen  = new Uniform(3.0, 7.0, Integer.toUnsignedLong(this.rng.nextInt()));
         ContinuousGenerator mechGen = new Normal(30.0, 10.0, Integer.toUnsignedLong(this.rng.nextInt()));
         ContinuousGenerator washGen = new Normal(15.0, 5.0, Integer.toUnsignedLong(this.rng.nextInt()));
@@ -44,6 +43,8 @@ public class EngineMod extends Engine {
         this.wash      = new ServicePoint(washGen, this.eventList, EventType.WASH_END, washers);
     }
 
+    // ---------- Engine lifecycle ----------
+
     @Override
     protected void initialize() {
         arrivals.generateNextEvent();
@@ -52,6 +53,15 @@ public class EngineMod extends Engine {
     @Override
     protected void runEvent(Event e) {
         double now = Clock.getInstance().getClock();
+
+        /**
+         * Possible customer flows:
+         *
+         * Arrival -> Reception -> Departure
+         * Arrival -> Reception -> Mechanic -> Departure
+         * Arrival -> Reception -> Wash -> Departure
+         * Arrival -> Reception -> Mechanic -> Wash -> Departure
+         */
 
         switch ((EventType) e.getType()) {
             case ARRIVAL: {
@@ -68,10 +78,11 @@ public class EngineMod extends Engine {
                     ServicePoint.EndInfo ei = this.reception.finishService(now);
                     if (ei == null) break;
                     finished++;
+
                     Customer c = ei.customer;
                     c.tReceptionEnd = now;
                     System.out.printf("Reception#%d end -> customer=%d at %.3f%n",
-                            ei.serverId, c.getId(), now);
+                        ei.serverId, c.getId(), now);
 
                     if (c.needsMechanic()) {
                         c.tMechanicQIn = now;
@@ -98,6 +109,7 @@ public class EngineMod extends Engine {
                     ServicePoint.EndInfo ei = this.mechanic.finishService(now);
                     if (ei == null) break;
                     finished++;
+
                     Customer c = ei.customer;
                     c.tMechanicEnd = now;
                     System.out.printf("Mechanic#%d end -> customer=%d at %.3f%n",
@@ -125,17 +137,14 @@ public class EngineMod extends Engine {
                     ServicePoint.EndInfo ei = this.wash.finishService(now);
                     if (ei == null) break;
                     finished++;
+
                     Customer c = ei.customer;
                     c.tWashEnd = now;
                     System.out.printf("Wash#%d end -> customer=%d at %.3f%n",
                         ei.serverId, c.getId(), now);
 
-                    if (c.needsMechanic() && c.tMechanicEnd <= 0) {
-                        c.tMechanicQIn = now;
-                        this.mechanic.addQueue(c);
-                    } else {
-                        depart(c, now);
-                    }
+                    // no chance for mechanic after wash
+                    depart(c, now);
                 }
                 if (finished == 0) {
                     double tnext = this.wash.nextEndTime();
@@ -172,11 +181,8 @@ public class EngineMod extends Engine {
         printPointWithServers("Wash", this.wash, now);
     }
 
-    private static double safeFutureTime(double candidate, double now) {
-        if (!Double.isFinite(candidate) || candidate <= now)
-            return Math.nextUp(now);
-        return candidate;
-    }
+
+    // ---------- Helper methods ----------
 
     private void startIfPossible(ServicePoint sp, EventType endType, double now) {
         int free = sp.availableSlots();
@@ -226,8 +232,12 @@ public class EngineMod extends Engine {
         }
     }
 
-    // text print methods
-    // TODO: deprecate when ui is implemented
+    private static double safeFutureTime(double candidate, double now) {
+        if (!Double.isFinite(candidate) || candidate <= now)
+            return Math.nextUp(now);
+        return candidate;
+    }
+
     private String labelFor(EventType et) {
         switch (et) {
             case RECEPTION_END: return "Reception";
@@ -237,6 +247,10 @@ public class EngineMod extends Engine {
             default:            return et.name();
         }
     }
+
+
+    // ---------- Printing helpers ----------
+    // TODO: deprecate when ui is implemented
     private void printPoint(String label, ServicePoint sp, double now) {
         int cap = sp.getCapacity();
         int served = sp.getServedCount();

@@ -18,7 +18,7 @@ public class Simulator {
 		Trace.setTraceLevel(Level.INFO);
 
 		int mechanics = 2;
-		int washers = 1;
+		int washers = 2;
 
 		// Engine m = new MyEngine();
 		Engine m = new EngineMod(mechanics, washers);
