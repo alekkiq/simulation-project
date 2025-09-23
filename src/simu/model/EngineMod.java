@@ -23,7 +23,7 @@ public class EngineMod extends Engine {
     // ---------- Constructors ----------------
 
     public EngineMod() {
-        this(1, 1); // amount of servers for mechanic and wash
+        this(1, 1); // default amount of servers for mechanic and wash
     }
 
     public EngineMod(int mechanics, int washers) {
@@ -54,7 +54,7 @@ public class EngineMod extends Engine {
     protected void runEvent(Event e) {
         double now = Clock.getInstance().getClock();
 
-        /**
+        /*
          * Possible customer flows:
          *
          * Arrival -> Reception -> Departure
@@ -184,6 +184,14 @@ public class EngineMod extends Engine {
 
     // ---------- Helper methods ----------
 
+    /**
+     * Try to start as many services as possible at the given service point.
+     * @remarks This may start multiple services if there are multiple free servers.
+     *          It may also start none if there is no queue or no free servers.
+     * @param sp Service point where to start services
+     * @param endType Event type to be used for the service end events
+     * @param now Current simulation time
+     */
     private void startIfPossible(ServicePoint sp, EventType endType, double now) {
         int free = sp.availableSlots();
         if (free <= 0) return;
@@ -204,6 +212,11 @@ public class EngineMod extends Engine {
         }
     }
 
+    /**
+     * Process the departure of the customer from the system
+     * @param c Customer who is departing
+     * @param now Current simulation time
+     */
     private void depart(Customer c, double now) {
         c.tDeparture = now;
         c.setRemovalTime(now);
