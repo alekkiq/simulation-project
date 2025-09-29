@@ -4,6 +4,9 @@ import eduni.distributions.ContinuousGenerator;
 import eduni.distributions.Negexp;
 import eduni.distributions.Normal;
 import eduni.distributions.Uniform;
+import simu.config.DistributionOptions;
+import simu.config.SimulationOptions;
+import simu.controller.IControllerMtoV;
 import simu.framework.*;
 
 import java.util.Random;
@@ -20,70 +23,193 @@ public class EngineMod extends Engine {
     private final ArrivalProcess arrivals;
     private final Random rng;
 
+    // options (gathered from UI)
+    // contains all the parameters for the simulation
+    // like number of servers, distributions, probabilities, etc.
+    private SimulationOptions options;
+
+    // controller
+    private IControllerMtoV controller;
+
+    /**
+     * Custom generator that modifies the speed of a base generator by a given factor.
+     * For example, a speed factor of 2.0 makes the service twice as fast (halves the time).
+     * This can be used to model servers with different efficiencies. (e.g. more experienced workers)
+     */
+    private static class CustomGen implements ContinuousGenerator {
+        private ContinuousGenerator base;
+        private double speedFactor;
+
+        CustomGen(ContinuousGenerator base, double speedFactor) {
+            this.base = base;
+            this.speedFactor = speedFactor <= 0.0 ? 1.0 : speedFactor;
+        }
+        @Override
+        public double sample() {
+            return this.base.sample() / this.speedFactor;
+        }
+        @Override
+        public void setSeed(long seed){}
+        @Override
+        public long getSeed(){ return this.base.getSeed(); }
+        @Override
+        public void reseed(){}
+    }
+
+
     // ---------- Constructors ----------------
-
     public EngineMod() {
-        this(1, 1); // default amount of servers for mechanic and wash
+        this(SimulationOptions.defaults(), null);
     }
 
-    public EngineMod(int mechanics, int washers) {
-        this.rng = new Random();
-
-       ContinuousGenerator interArrivalGen = new Negexp(10, Integer.toUnsignedLong(this.rng.nextInt()));
-       this.arrivals = new ArrivalProcess(interArrivalGen, this.eventList, EventType.ARRIVAL);
-
-        // TODO: parameterization to distributions
-        ContinuousGenerator recGen  = new Uniform(3.0, 7.0, Integer.toUnsignedLong(this.rng.nextInt()));
-        ContinuousGenerator mechGen = new Normal(30.0, 10.0, Integer.toUnsignedLong(this.rng.nextInt()));
-        ContinuousGenerator washGen = new Normal(15.0, 5.0, Integer.toUnsignedLong(this.rng.nextInt()));
-
-        // service points
-        this.reception = new ServicePoint(recGen,  this.eventList, EventType.RECEPTION_END);
-        this.mechanic  = new ServicePoint(mechGen, this.eventList, EventType.MECHANIC_END, mechanics);
-        this.wash      = new ServicePoint(washGen, this.eventList, EventType.WASH_END, washers);
+    public EngineMod(IControllerMtoV controller) {
+        this(SimulationOptions.defaults(), controller);
     }
+
+    public EngineMod(SimulationOptions options, IControllerMtoV controller) {
+        this.options   = options;
+        this.controller= controller;
+        this.rng       = new Random(options.getBaseRandomSeed());
+        this.reception = buildReception(options);
+        this.mechanic  = buildMechanic(options);
+        this.wash      = buildWash(options);
+        this.arrivals  = buildArrivals(options);
+    }
+
+
+    // ---------- Initialization ----------
+
+    private ArrivalProcess buildArrivals(SimulationOptions options) {
+        ContinuousGenerator gen = options.getInterArrival().toGen(this.nextSeed());
+        return new ArrivalProcess(gen, this.eventList, EventType.ARRIVAL);
+    }
+
+    private ServicePoint buildReception(SimulationOptions options) {
+        ContinuousGenerator gen = options.getReceptionService().toGen(this.nextSeed());
+        return new ServicePoint(gen, this.eventList, EventType.RECEPTION_END);
+    }
+
+    private ServicePoint buildMechanic(SimulationOptions options) {
+        int n = options.getMechanicServers();
+        double[] speeds = options.getMechanicSpeedFactors();
+        ContinuousGenerator[] gens = new ContinuousGenerator[n];
+
+        for (int i = 0; i < n; i++) {
+            ContinuousGenerator base = options.getMechanicService().toGen(this.nextSeed());
+            gens[i] = new CustomGen(base, speeds[i]);
+        }
+
+        return new ServicePoint(gens, this.eventList, EventType.MECHANIC_END);
+    }
+
+    private ServicePoint buildWash(SimulationOptions options) {
+        int n = options.getWashServers();
+        double[] speeds = options.getWashSpeedFactors();
+        ContinuousGenerator[] gens = new ContinuousGenerator[n];
+
+        for (int i = 0; i < n; i++) {
+            ContinuousGenerator base = options.getWashService().toGen(this.nextSeed());
+            gens[i] = new CustomGen(base, speeds[i]);
+        }
+
+        return new ServicePoint(gens, this.eventList, EventType.WASH_END);
+    }
+
+    private long nextSeed() {
+        return Integer.toUnsignedLong(this.rng.nextInt());
+    }
+
 
     // ---------- Engine lifecycle ----------
 
     @Override
     protected void initialize() {
-        arrivals.generateNextEvent();
+        this.arrivals.generateNextEvent();
     }
 
     @Override
     protected void runEvent(Event e) {
-        double now = Clock.getInstance().getClock();
+        // Possible customer flows:
+        //
+        // Arrival -> Reception -> Departure
+        // Arrival -> Reception -> Mechanic -> Departure
+        // Arrival -> Reception -> Wash -> Departure
+        // Arrival -> Reception -> Mechanic -> Wash -> Departure
 
-        /*
-         * Possible customer flows:
-         *
-         * Arrival -> Reception -> Departure
-         * Arrival -> Reception -> Mechanic -> Departure
-         * Arrival -> Reception -> Wash -> Departure
-         * Arrival -> Reception -> Mechanic -> Wash -> Departure
-         */
+        double now = Clock.getInstance().getClock();
 
         switch ((EventType) e.getType()) {
             case ARRIVAL: {
                 Customer c = new Customer();
-                decideRouting(c);
+                this.decideRouting(c);
                 c.tReceptionQIn = now;
                 this.reception.addQueue(c);
+
+                if (this.controller != null) {
+                    this.controller.visualiseCustomer();
+                }
+
                 this.arrivals.generateNextEvent();
                 break;
             }
             case RECEPTION_END: {
-                int finished = 0;
-                while (true) {
-                    ServicePoint.EndInfo ei = this.reception.finishService(now);
-                    if (ei == null) break;
-                    finished++;
+                this.handleEnd(this.reception, EventType.RECEPTION_END, now);
+                break;
+            }
+            case MECHANIC_END: {
+                this.handleEnd(this.mechanic, EventType.MECHANIC_END, now);
+                break;
+            }
+            case WASH_END: {
+                this.handleEnd(this.wash, EventType.WASH_END, now);
+                break;
+            }
+            default: break;
+        }
+    }
 
-                    Customer c = ei.customer;
+    /**
+     * Decide the routing for the customer after reception
+     * @param c Customer whose routing is to be decided
+     *
+     * TODO: parameterize the probabilities
+     */
+    private void decideRouting(Customer c) {
+        boolean mech = this.rng.nextDouble() < this.options.getProbNeedsMechanic();
+        boolean wash = this.rng.nextDouble() < this.options.getProbNeedsWash();
+
+        c.setNeedsMechanic(mech);
+        c.setNeedsWash(wash);
+
+        if (wash) {
+            double p = this.rng.nextDouble();
+            double ext = this.options.getWashProbExterior();
+            double inter = ext + this.options.getWashProbInterior();
+
+            if (p < ext) {
+                c.setWashProgram(Customer.WashProgram.EXTERIOR);
+            } else if (p < inter) {
+                c.setWashProgram(Customer.WashProgram.INTERIOR);
+            } else {
+                c.setWashProgram(Customer.WashProgram.BOTH);
+            }
+        }
+    }
+
+    private void handleEnd(ServicePoint sp, EventType type, double now) {
+        int finished = 0;
+
+        while (true) {
+            ServicePoint.EndInfo ei = sp.finishService(now);
+
+            if (ei == null) break;
+
+            finished++;
+            Customer c = ei.customer;
+
+            switch (type) {
+                case RECEPTION_END:
                     c.tReceptionEnd = now;
-                    System.out.printf("Reception#%d end -> customer=%d at %.3f%n",
-                        ei.serverId, c.getId(), now);
-
                     if (c.needsMechanic()) {
                         c.tMechanicQIn = now;
                         this.mechanic.addQueue(c);
@@ -91,71 +217,34 @@ public class EngineMod extends Engine {
                         c.tWashQIn = now;
                         this.wash.addQueue(c);
                     } else {
-                        depart(c, now);
+                        this.depart(c, now);
                     }
-                }
-                if (finished == 0) {
-                    double tnext = this.reception.nextEndTime();
-                    if (Double.isFinite(tnext)) {
-                        tnext = safeFutureTime(tnext, now);
-                        this.eventList.add(new Event(EventType.RECEPTION_END, tnext));
-                    }
-                }
-                break;
-            }
-            case MECHANIC_END: {
-                int finished = 0;
-                while (true) {
-                    ServicePoint.EndInfo ei = this.mechanic.finishService(now);
-                    if (ei == null) break;
-                    finished++;
+                    break;
 
-                    Customer c = ei.customer;
+                case MECHANIC_END:
                     c.tMechanicEnd = now;
-                    System.out.printf("Mechanic#%d end -> customer=%d at %.3f%n",
-                            ei.serverId, c.getId(), now);
-
                     if (c.needsWash() && c.tWashEnd <= 0) {
                         c.tWashQIn = now;
                         this.wash.addQueue(c);
                     } else {
-                        depart(c, now);
+                        this.depart(c, now);
                     }
-                }
-                if (finished == 0) {
-                    double tnext = this.mechanic.nextEndTime();
-                    if (Double.isFinite(tnext)) {
-                        tnext = safeFutureTime(tnext, now);
-                        this.eventList.add(new Event(EventType.MECHANIC_END, tnext));
-                    }
-                }
-                break;
-            }
-            case WASH_END: {
-                int finished = 0;
-                while (true) {
-                    ServicePoint.EndInfo ei = this.wash.finishService(now);
-                    if (ei == null) break;
-                    finished++;
+                    break;
 
-                    Customer c = ei.customer;
+                case WASH_END:
                     c.tWashEnd = now;
-                    System.out.printf("Wash#%d end -> customer=%d at %.3f%n",
-                        ei.serverId, c.getId(), now);
+                    this.depart(c, now);
+                    break;
 
-                    // no chance for mechanic after wash
-                    depart(c, now);
-                }
-                if (finished == 0) {
-                    double tnext = this.wash.nextEndTime();
-                    if (Double.isFinite(tnext)) {
-                        tnext = safeFutureTime(tnext, now);
-                        this.eventList.add(new Event(EventType.WASH_END, tnext));
-                    }
-                }
-                break;
+                default: break;
             }
-            default: break;
+        }
+        if (finished == 0) {
+            double tnext = sp.nextEndTime();
+            if (Double.isFinite(tnext)) {
+                tnext = safeFutureTime(tnext, now);
+                this.eventList.add(new Event(type, tnext));
+            }
         }
     }
 
@@ -164,52 +253,11 @@ public class EngineMod extends Engine {
         double now = Clock.getInstance().getClock();
 
         // single-server service points
-        startIfPossible(this.reception, EventType.RECEPTION_END, now);
+        this.startIfPossible(this.reception, EventType.RECEPTION_END, now);
 
         // possible multiserver service points
-        startIfPossible(this.mechanic,  EventType.MECHANIC_END,  now);
-        startIfPossible(this.wash,      EventType.WASH_END,      now);
-    }
-
-    @Override
-    protected void results() {
-        double now = Clock.getInstance().getClock();
-
-        System.out.println("\n--- Final statistics ---");
-        printPoint("Reception", this.reception, now);
-        printPointWithServers("Mechanic", this.mechanic, now);
-        printPointWithServers("Wash", this.wash, now);
-    }
-
-
-    // ---------- Helper methods ----------
-
-    /**
-     * Try to start as many services as possible at the given service point.
-     * @remarks This may start multiple services if there are multiple free servers.
-     *          It may also start none if there is no queue or no free servers.
-     * @param sp Service point where to start services
-     * @param endType Event type to be used for the service end events
-     * @param now Current simulation time
-     */
-    private void startIfPossible(ServicePoint sp, EventType endType, double now) {
-        int free = sp.availableSlots();
-        if (free <= 0) return;
-
-        for (int i = 0; i < free; i++) {
-            ServicePoint.StartInfo si = sp.tryStart(now);
-            if (si == null) break;
-
-            switch (endType) {
-                case RECEPTION_END: si.customer.tReceptionStart = now;  break;
-                case MECHANIC_END:  si.customer.tMechanicStart = now;   break;
-                case WASH_END:      si.customer.tWashStart = now;       break;
-                default: break;
-            }
-
-            System.out.printf("%s#%d start -> customer=%d, service=%.3f, end=%.3f%n",
-                labelFor(endType), si.serverId, si.customer.getId(), si.serviceTime, si.endTime);
-        }
+        this.startIfPossible(this.mechanic,  EventType.MECHANIC_END,  now);
+        this.startIfPossible(this.wash,      EventType.WASH_END,      now);
     }
 
     /**
@@ -223,25 +271,48 @@ public class EngineMod extends Engine {
         c.reportResults();
     }
 
+    @Override
+    protected void results() {
+        double now = Clock.getInstance().getClock();
+
+        if (this.controller != null) {
+            this.controller.showEndTime(now);
+        }
+
+        System.out.println("\n--- Final statistics ---");
+        this.printPoint("Reception", this.reception, now);
+        this.printPointWithServers("Mechanic", this.mechanic, now);
+        this.printPointWithServers("Wash", this.wash, now);
+    }
+
+
+    // ---------- Helper methods ----------
+
     /**
-     * Decide the routing for the customer after reception
-     * @param c Customer whose routing is to be decided
-     *
-     * TODO: parameterize the probabilities
+     * Try to start as many services as possible at the given service point.
+     * @param sp Service point where to start services
+     * @param type Event type to be used for the service end events
+     * @param now Current simulation time
      */
-    private void decideRouting(Customer c) {
-        boolean mech = rng.nextDouble() < 0.7;
-        boolean wash = rng.nextDouble() < 0.5;
+    private void startIfPossible(ServicePoint sp, EventType type, double now) {
+        int free = sp.availableSlots();
 
-        c.setNeedsMechanic(mech);
-        c.setNeedsWash(wash);
+        if (free <= 0) return;
 
-        // decide wash type
-        if (wash) {
-            double p = rng.nextDouble();
-            if (p < 0.4) c.setWashProgram(Customer.WashProgram.EXTERIOR);
-            else if (p < 0.8) c.setWashProgram(Customer.WashProgram.INTERIOR);
-            else c.setWashProgram(Customer.WashProgram.BOTH);
+        for (int i = 0; i < free; i++) {
+            ServicePoint.StartInfo si = sp.tryStart(now);
+
+            if (si == null) break;
+
+            switch (type) {
+                case RECEPTION_END: si.customer.tReceptionStart = now;  break;
+                case MECHANIC_END:  si.customer.tMechanicStart = now;   break;
+                case WASH_END:      si.customer.tWashStart = now;       break;
+                default: break;
+            }
+
+            System.out.printf("%s#%d start -> customer=%d, service=%.3f, end=%.3f%n",
+                this.labelFor(type), si.serverId, si.customer.getId(), si.serviceTime, si.endTime);
         }
     }
 
@@ -276,7 +347,7 @@ public class EngineMod extends Engine {
             label, cap, served, avgWait, avgService, avgTotal, util * 100.0);
     }
     private void printPointWithServers(String label, ServicePoint sp, double now) {
-        printPoint(label, sp, now);
+        this.printPoint(label, sp, now);
         double[] busy = sp.getPerServerBusyTimeSnapshot();
         int[] served = sp.getPerServerServedSnapshot();
         for (int i = 0; i < busy.length; i++) {

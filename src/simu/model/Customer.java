@@ -26,6 +26,7 @@ public class Customer {
 	private WashProgram washProgram = WashProgram.NONE;
 
 	// timestamps
+	// naming explanation: (t -> time, QIn -> Queue In)
 	public double tReceptionQIn, tReceptionStart, tReceptionEnd;
 	public double tMechanicQIn, tMechanicStart, tMechanicEnd;
 	public double tWashQIn, tWashStart, tWashEnd;
