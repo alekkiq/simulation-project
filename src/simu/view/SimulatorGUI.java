@@ -86,12 +86,12 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         );
         numMechanicsSpinner.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(
-                        0, 50, params.numMechanicsProperty().get(), 1
+                        0, 3, params.numMechanicsProperty().get(), 1
                 )
         );
         numWashersSpinner.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(
-                        0, 50, params.numWashersProperty().get(), 1
+                        0, 3, params.numWashersProperty().get(), 1
                 )
         );
 
