@@ -3,14 +3,17 @@ package simu.controller;
 import javafx.application.Platform;
 import simu.framework.IEngine;
 import simu.model.EngineMod;
+import simu.model.SimParameters;
 import simu.view.ISimulatorUI;
 
 public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 	private IEngine engine;
 	private ISimulatorUI ui;
+    private SimParameters params;
 	
-	public Controller(ISimulatorUI ui) {
+	public Controller(ISimulatorUI ui, SimParameters params) {
 		this.ui = ui;
+        this.params = params;
 	}
 
 	/* Engine control: */
