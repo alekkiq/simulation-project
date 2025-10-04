@@ -1,14 +1,11 @@
 package simu.model;
 
-import eduni.distributions.ContinuousGenerator;
-import eduni.distributions.Negexp;
-import eduni.distributions.Normal;
-import eduni.distributions.Uniform;
-import simu.config.DistributionOptions;
+import distributions.ContinuousGenerator;
 import simu.config.SimulationOptions;
 import simu.controller.IControllerMtoV;
 import simu.framework.*;
 
+import java.util.List;
 import java.util.Random;
 
 public class EngineMod extends Engine {
@@ -27,6 +24,13 @@ public class EngineMod extends Engine {
     // contains all the parameters for the simulation
     // like number of servers, distributions, probabilities, etc.
     private SimulationOptions options;
+
+    // snapshot fields
+    private ISnapshotListener snapshotListener;
+    private long lastUiPushMillis = 0;
+    private static final long UI_PUSH_INTERVAL_MS = 120; // tweak
+    private long totalArrived = 0;
+    private long totalServed = 0;
 
     // controller
     private IControllerMtoV controller;
@@ -125,6 +129,7 @@ public class EngineMod extends Engine {
     @Override
     protected void initialize() {
         this.arrivals.generateNextEvent();
+        this.maybePushSnapshot();
     }
 
     @Override
@@ -144,6 +149,7 @@ public class EngineMod extends Engine {
                 this.decideRouting(c);
                 c.tReceptionQIn = now;
                 this.reception.addQueue(c);
+                this.totalArrived++;
 
                 if (this.controller != null) {
                     this.controller.visualiseCustomer();
@@ -166,6 +172,7 @@ public class EngineMod extends Engine {
             }
             default: break;
         }
+        this.maybePushSnapshot();
     }
 
     /**
@@ -258,6 +265,8 @@ public class EngineMod extends Engine {
         // possible multiserver service points
         this.startIfPossible(this.mechanic,  EventType.MECHANIC_END,  now);
         this.startIfPossible(this.wash,      EventType.WASH_END,      now);
+
+        this.maybePushSnapshot();
     }
 
     /**
@@ -269,6 +278,7 @@ public class EngineMod extends Engine {
         c.tDeparture = now;
         c.setRemovalTime(now);
         c.reportResults();
+        this.totalServed++;
     }
 
     @Override
@@ -285,6 +295,68 @@ public class EngineMod extends Engine {
         this.printPointWithServers("Wash", this.wash, now);
     }
 
+
+    // ---------- Snapshot for UI ----------
+    public void setSnapshotListener(ISnapshotListener l) {
+        this.snapshotListener = l;
+    }
+
+    private void maybePushSnapshot() {
+        long nowWall = System.currentTimeMillis();
+        if (this.snapshotListener != null &&
+                (this.lastUiPushMillis == 0 || nowWall - this.lastUiPushMillis >= UI_PUSH_INTERVAL_MS)) {
+            this.lastUiPushMillis = nowWall;
+            this.snapshotListener.onSnapshot(buildSnapshot());
+        }
+    }
+
+    private SimulationSnapshot buildSnapshot() {
+        double now = Clock.getInstance().getClock();
+        List<SimulationSnapshot.ServicePointState> sps = List.of(
+                snapshotFor("Reception", reception, now),
+                snapshotFor("Mechanic", mechanic, now),
+                snapshotFor("Wash", wash, now)
+        );
+        return new SimulationSnapshot(now, totalArrived, totalServed, sps);
+    }
+
+    private SimulationSnapshot.ServicePointState snapshotFor(String name, ServicePoint sp, double now) {
+        int cap = sp.getCapacity();
+        int busy = sp.getBusyServerCount();
+        int qlen = sp.getQueueLength();
+        int served = sp.getServedCount();
+        double avgWait = sp.getAverageWaitTime();
+        double avgService = sp.getAverageServiceTime();
+        double util = (now > 0 && cap > 0) ? sp.getBusyTime() / (cap * now) : 0.0;
+
+        int[] perQL = sp.getPerServerQueueLengthsSnapshot();
+        boolean[] busyFlags = sp.getPerServerBusyFlagsSnapshot();
+        double[] perBusy = sp.getPerServerBusyTimeSnapshot();
+        int[] perServed = sp.getPerServerServedSnapshot();
+        double[] perUtil = new double[perBusy.length];
+        double[] perAvgService = new double[perBusy.length];
+        for (int i = 0; i < perBusy.length; i++) {
+            perUtil[i] = now > 0 ? perBusy[i] / now : 0.0;
+            perAvgService[i] = perServed[i] > 0 ? perBusy[i] / perServed[i] : 0.0;
+        }
+
+        return new SimulationSnapshot.ServicePointState(
+                name,
+                busy,
+                cap,
+                qlen,
+                served,
+                avgWait,
+                avgService,
+                util,
+                perQL,
+                busyFlags,
+                perServed,
+                perBusy,
+                perUtil,
+                perAvgService
+        );
+    }
 
     // ---------- Helper methods ----------
 

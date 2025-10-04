@@ -1,13 +1,10 @@
 package simu.model;
 
-import eduni.distributions.ContinuousGenerator;
+import distributions.ContinuousGenerator;
 import simu.framework.*;
 
 // import java.time.Clock;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.LinkedList;
-import java.util.PriorityQueue;
 
 /**
  * Service Point implements the functionalities, calculations and reporting.
@@ -292,7 +289,40 @@ public class ServicePoint {
 	}
 
 
+	// ---------- Snapshot helpers ----------
+
+	public int[] getPerServerQueueLengthsSnapshot() {
+		int[] q = new int[this.capacity];
+		for (int i = 0; i < this.capacity; i++) {
+			q[i] = this.queues[i].size();
+		}
+		return q;
+	}
+
+	public boolean[] getPerServerBusyFlagsSnapshot() {
+		boolean[] b = new boolean[this.capacity];
+		for (int i = 0; i < this.capacity; i++) {
+			b[i] = this.active[i] != null;
+		}
+		return b;
+	}
+
+
 	// ---------- Getters and analytics ----------
+
+	public int getBusyServerCount() {
+		int cnt = 0;
+		for (Customer c : this.active) if (c != null) cnt++;
+		return cnt;
+	}
+
+	public boolean isBusy() {
+		return this.getBusyServerCount() > 0;
+	}
+
+	public int getQueueLength() {
+		return queueSize();
+	}
 
 	public int getServedCount() { return this.served; }
 	public int getCapacity() { return this.capacity; }
