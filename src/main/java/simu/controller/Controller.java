@@ -3,8 +3,11 @@ package simu.controller;
 import javafx.application.Platform;
 import simu.framework.IEngine;
 import simu.model.EngineMod;
+import simu.model.ISnapshotListener;
 import simu.model.SimParameters;
 import simu.view.ISimulatorUI;
+import simu.view.IVisualisation;
+import simu.framework.Clock;
 
 public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 	private IEngine engine;
@@ -19,12 +22,20 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 	/* Engine control: */
 	@Override
 	public void startSimulation() {
-		engine = new EngineMod(this); // new Engine thread is created for every simulation
+		// reset clock so that multiple runs work correctly
+		Clock.getInstance().setClock(0.0);
+
+		var options = params.toConfig();
+		engine = new EngineMod(options, this);
+		if (engine instanceof EngineMod em) {
+			var vis = ui.getVisualisation();
+			if (vis instanceof ISnapshotListener listener) {
+				em.setSnapshotListener(listener);
+			}
+		}
 		engine.setSimulationTime(ui.getTime());
 		engine.setDelay(ui.getDelay());
-		ui.getVisualisation().clearDisplay();
 		((Thread) engine).start();
-		//((Thread)engine).run(); // Never like this, why?
 	}
 	
 	@Override
@@ -48,6 +59,8 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 
 	@Override
 	public void visualiseCustomer() {
-		Platform.runLater(() -> ui.getVisualisation().newCustomer());
+		IVisualisation vis = ui.getVisualisation();
+		if (vis == null) return;
+		Platform.runLater(vis::newCustomer);
 	}
 }
