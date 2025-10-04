@@ -4,6 +4,7 @@ import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import simu.config.DistributionOptions;
+import simu.config.SimulationOptions;
 
 public final class SimParameters {
     // --- Core ---
@@ -54,6 +55,35 @@ public final class SimParameters {
         while (list.size() < size) list.add(new SimpleDoubleProperty(def));
         // shrink (drops trailing properties; GUI should rebuild its sliders)
         while (list.size() > size) list.remove(list.size() - 1);
+    }
+
+    public SimulationOptions toConfig() {
+        SimulationOptions o = new SimulationOptions();
+        o.setSimulationDuration(getSimDuration());
+        o.setUiDelayMillis(getUiDelayMs());
+
+        o.setMechanicServers(getNumMechanics());
+        o.setWashServers(getNumWashers());
+
+        o.setInterArrival(getInterArrival());
+        o.setReceptionService(getReceptionService());
+        o.setMechanicService(getMechanicService());
+        o.setWashService(getWashService());
+
+        o.setProbNeedsMechanic(pNeedsMechanicProperty().get());
+        o.setProbNeedsWash(pNeedsWashProperty().get());
+
+        o.setWashProbExterior(pWashExteriorProperty().get());
+        o.setWashProbInterior(pWashInteriorProperty().get());
+        o.setWashProbBoth(pWashBothProperty().get());
+
+        o.setMechanicSpeedFactors(mechanicSpeedFactorsArray());
+        o.setWashSpeedFactors(washerSpeedFactorsArray());
+
+        // Optional: provide a reproducible seed if you add one to SimParameters later
+        // o.setBaseRandomSeed(System.currentTimeMillis());
+
+        return o;
     }
 
     // --- Property accessors ---

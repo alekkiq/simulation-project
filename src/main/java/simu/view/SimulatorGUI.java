@@ -51,6 +51,22 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
     // --- Controller ---
     private IControllerVtoM controller;
+    private final Visualisation visualisation = new Visualisation(900, 600);
+    private Stage visStage;
+
+    private void showAndStart() {
+        if (visStage == null) {
+            visStage = new Stage();
+            visStage.setTitle("Simulation Visualisation");
+            StackPane root = new StackPane(visualisation);
+            root.setPadding(new Insets(8));
+            visStage.setScene(new Scene(root, 920, 640));
+            visStage.show();
+        } else if (!visStage.isShowing()) {
+            visStage.show();
+        }
+        controller.startSimulation();
+    }
 
     // -------- helpers --------
     private static Slider makeProbSlider(double def) {
@@ -209,7 +225,8 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         startButton.setPrefWidth(220);
 
         startButton.setOnAction(e -> {
-            System.out.println(params);
+            // System.out.println(params);
+            this.showAndStart();
         });
 
         HBox startRow = new HBox(startButton);
@@ -337,7 +354,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
     }
 
     @Override
-    public IVisualisation getVisualisation() { return null; }
+    public IVisualisation getVisualisation() { return this.visualisation; }
 
     public static void main(String[] args) { launch(args); }
 }
