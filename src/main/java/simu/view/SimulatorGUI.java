@@ -151,21 +151,22 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
         // --- Distribution dialogs (write back to params) ---
         Button editInterBtn = new Button("Edit Inter-arrival…");
+        Button editReceptionBtn = new Button("Edit Reception…");
+        Button editMechanicBtn = new Button("Edit Mechanic…");
+        Button editWashBtn = new Button("Edit Wash…");
+
         editInterBtn.setOnAction(e ->
                 DistributionOptionsDialog.show("Inter-arrival", params.interArrivalProperty().get())
                         .ifPresent(params.interArrivalProperty()::set)
         );
-        Button editReceptionBtn = new Button("Edit Reception…");
         editReceptionBtn.setOnAction(e ->
                 DistributionOptionsDialog.show("Reception service", params.receptionServiceProperty().get())
                         .ifPresent(params.receptionServiceProperty()::set)
         );
-        Button editMechanicBtn = new Button("Edit Mechanic…");
         editMechanicBtn.setOnAction(e ->
                 DistributionOptionsDialog.show("Mechanic service", params.mechanicServiceProperty().get())
                         .ifPresent(params.mechanicServiceProperty()::set)
         );
-        Button editWashBtn = new Button("Edit Wash…");
         editWashBtn.setOnAction(e ->
                 DistributionOptionsDialog.show("Wash service", params.washServiceProperty().get())
                         .ifPresent(params.washServiceProperty()::set)
@@ -174,15 +175,17 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         // --- Layout ---
         Label heading = new Label("Car Kosovo Simulator");
         heading.setStyle("""
-            -fx-font-size: 22px;
-            -fx-font-weight: bold;
-            -fx-padding: 0 0 10 0;
-        """);
-
+                    -fx-font-size: 30px;
+                    -fx-font-weight: 900;             /* bolder */
+                    -fx-text-fill: #ffffff;\s
+                    -fx-border-color: #CD4527;
+                    -fx-border-width: 1;
+                    -fx-border-radius: 5;
+                    -fx-padding: 10;
+                """
+        );
         GridPane form = new GridPane();
-        form.setHgap(24);
-        form.setVgap(16);
-        form.setPadding(new Insets(16));
+        form.getStyleClass().add("form-grid");                   // style: grid class
 
         ColumnConstraints col1 = new ColumnConstraints();
         col1.setPercentWidth(50);
@@ -197,30 +200,38 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         form.getColumnConstraints().setAll(col1, col2);
 
         int r = 0;
+
+// --- Section: General Options ---
+        form.add(sectionHeader("General Options"), 0, r++, 2, 1);
         form.add(field("Simulation duration", simulationDurationSpinner), 0, r);
         form.add(field("UI delay (ms)", uiDelaySpinner),                 1, r++);
 
         form.add(field("Number of Mechanics", numMechanicsSpinner), 0, r);
         form.add(field("Number of Washers",   numWashersSpinner),   1, r++);
 
-        form.add(field("P(Needs Mechanic)", probNeedsMechanicSlider), 0, r);
-        form.add(field("P(Needs Wash)",     probNeedsWashSlider),     1, r++);
+// --- Section: Customer Probabilities ---
+        form.add(sectionHeader("Customer Probabilities"), 0, r++, 2, 1);
+        form.add(fieldWithValue("P(Needs Mechanic)", probNeedsMechanicSlider, "%.0f%%", 100), 0, r);
+        form.add(fieldWithValue("P(Needs Wash)",     probNeedsWashSlider,     "%.0f%%", 100), 1, r++);
 
-        form.add(field("Wash: Exterior", probWashExteriorSlider), 0, r);
-        form.add(field("Wash: Interior", probWashInteriorSlider), 1, r++);
-        form.add(field("Wash: Both",     probWashBothSlider),     0, r);
-        form.add(field("Wash split sum", washSplitSumLabel),      1, r++);
+        form.add(fieldWithValue("Wash: Exterior", probWashExteriorSlider, "%.0f%%", 100), 0, r);
+        form.add(fieldWithValue("Wash: Interior", probWashInteriorSlider, "%.0f%%", 100), 1, r++);
+        form.add(fieldWithValue("Wash: Both",     probWashBothSlider,     "%.0f%%", 100), 0, r);
+        form.add(field("Wash split sum", washSplitSumLabel),             1, r++);
 
+// --- Section: Distribution Options ---
+        form.add(sectionHeader("Distribution Options"), 0, r++, 2, 1);
         form.add(field("Inter-arrival",       editInterBtn),     0, r);
         form.add(field("Reception service",   editReceptionBtn), 1, r++);
         form.add(field("Mechanic service",    editMechanicBtn),  0, r);
         form.add(field("Wash service",        editWashBtn),      1, r++);
 
-        // Dynamic sections spanning both columns
+// --- Section: Service Point Speed Factors ---
+        form.add(sectionHeader("Service Point Speed Factors"), 0, r++, 2, 1);
         form.add(labeledBox("Mechanic speeds (0.5x–2.0x)", mechanicSpeedsBox), 0, r++, 2, 1);
         form.add(labeledBox("Washer speeds (0.5x–2.0x)",   washerSpeedsBox),   0, r++, 2, 1);
 
-        // Start button row
+// --- Start button ---
         Button startButton = new Button("Start Simulation");
         startButton.setPrefWidth(220);
 
@@ -228,15 +239,16 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
             // System.out.println(params);
             this.showAndStart();
         });
+        startButton.getStyleClass().add("primary");
+        startButton.setOnAction(e -> System.out.println(params));
 
         HBox startRow = new HBox(startButton);
         startRow.setAlignment(Pos.CENTER);
         startRow.setPadding(new Insets(8, 0, 0, 0));
-
         form.add(startRow, 0, r, 2, 1);
         GridPane.setValignment(startRow, VPos.TOP);
 
-        // single scroll container around the form
+
         ScrollPane scroll = new ScrollPane(form);
         scroll.setFitToWidth(true);
         scroll.setFitToHeight(false);
@@ -244,12 +256,17 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         VBox root = new VBox(12, heading, scroll);
-        root.setAlignment(Pos.TOP_LEFT);
+        root.setAlignment(Pos.TOP_CENTER);
         root.setPadding(new Insets(20));
+        root.getStyleClass().add("root-container");             // style: root container
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
+        Scene scene = new Scene(root, 900, 900);
+        // style: load stylesheet
+        scene.getStylesheets().add("styles.css");
+
         stage.setTitle("Car Kosovo Simulator");
-        stage.setScene(new Scene(root, 900, 900));
+        stage.setScene(scene);
         stage.show();
     }
 
@@ -269,14 +286,14 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
             s.setBlockIncrement(0.05);
             s.setMaxWidth(Double.MAX_VALUE);
 
-            // bidirectional: slider <-> property
             p.bindBidirectional(s.valueProperty());
 
             Label value = new Label();
+            value.getStyleClass().add("value-chip");             // style: value chip
             value.textProperty().bind(p.asString("%.2f"));
 
             HBox row = new HBox(10, new Label("Mechanic #" + (i + 1) + " speed"), s, value);
-            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("row");                      // style: row spacing
             HBox.setHgrow(s, Priority.ALWAYS);
 
             mechanicSpeedsBox.getChildren().add(row);
@@ -302,10 +319,11 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
             p.bindBidirectional(s.valueProperty());
 
             Label value = new Label();
+            value.getStyleClass().add("value-chip");             // style: value chip
             value.textProperty().bind(p.asString("%.2f"));
 
             HBox row = new HBox(10, new Label("Washer #" + (i + 1) + " speed"), s, value);
-            row.setAlignment(Pos.CENTER_LEFT);
+            row.getStyleClass().add("row");                      // style: row spacing
             HBox.setHgrow(s, Priority.ALWAYS);
 
             washerSpeedsBox.getChildren().add(row);
@@ -323,6 +341,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         box.setAlignment(Pos.TOP_LEFT);
         VBox.setVgrow(content, Priority.NEVER);
         GridPane.setFillWidth(box, true);
+        box.getStyleClass().add("card");                         // style: card
         return box;
     }
 
@@ -331,13 +350,43 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         l.setStyle("-fx-font-weight: bold;");
 
         if (control instanceof Region r) {
-            r.setMaxWidth(Double.MAX_VALUE); // stretch within grid cell
+            r.setMaxWidth(Double.MAX_VALUE);
         }
 
         VBox box = new VBox(6, l, control);
         box.setAlignment(Pos.TOP_LEFT);
         GridPane.setFillWidth(box, true);
+        box.getStyleClass().add("field");                        // style: field
         return box;
+    }
+
+    // Adds a live value label to a slider (e.g., show percent)
+    private static VBox fieldWithValue(String label, Slider slider, String fmt, double scale) {
+        Label l = new Label(label);
+        l.setStyle("-fx-font-weight: bold;");
+
+        Label v = new Label();
+        v.getStyleClass().add("value-chip");                     // style: value chip
+        v.textProperty().bind(slider.valueProperty().multiply(scale).asString(fmt));
+
+        HBox row = new HBox(10, slider, v);
+        row.getStyleClass().add("row");
+        HBox.setHgrow(slider, Priority.ALWAYS);
+
+        VBox box = new VBox(6, l, row);
+        box.getStyleClass().add("field");
+        return box;
+    }
+
+    private static Label sectionHeader(String text) {
+        Label l = new Label(text);
+        l.setStyle("""
+        -fx-font-size: 20px;
+        -fx-font-weight: bold;
+        -fx-text-fill: white;
+        -fx-padding: 12 0 4 0;
+    """);
+        return l;
     }
 
     // === ISimulatorUI ===
