@@ -5,6 +5,8 @@ import simu.config.SimulationOptions;
 import simu.controller.IControllerMtoV;
 import simu.framework.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class EngineMod extends Engine {
@@ -14,6 +16,11 @@ public class EngineMod extends Engine {
     // multiserver service points
     private final ServicePoint mechanic;
     private final ServicePoint wash;
+
+    // add counters for different wash programs
+    private int washExteriorCount;
+    private int washInteriorCount;
+    private int washBothCount;
 
     // arrival process
     private final ArrivalProcess arrivals;
@@ -70,30 +77,7 @@ public class EngineMod extends Engine {
         this.mechanic  = buildMechanic(options);
         this.wash      = buildWash(options);
         this.arrivals  = buildArrivals(options);
-    }
 
-    public EngineMod(IControllerMtoV controller, SimParameters params) {
-        // Start with default options to ensure all distributions are initialized
-        this.options = SimulationOptions.defaults();
-        this.controller = controller;
-
-        // Update options from params while keeping the default distributions
-        options.setMechanicServers(params.numMechanicsProperty().get());
-        options.setWashServers(params.numWashersProperty().get());
-        options.setProbNeedsMechanic(params.pNeedsMechanicProperty().get());
-        options.setProbNeedsWash(params.pNeedsWashProperty().get());
-        options.setWashProbExterior(params.pWashExteriorProperty().get());
-        options.setWashProbInterior(params.pWashInteriorProperty().get());
-        options.setWashProbBoth(params.pWashBothProperty().get());
-
-        // Initialize services
-        this.rng = new Random(options.getBaseRandomSeed());
-        this.reception = buildReception(options);
-        this.mechanic = buildMechanic(options);
-        this.wash = buildWash(options);
-        this.arrivals = buildArrivals(options);
-
-        // Update visualization with initial configuration
         if (controller != null) {
             controller.updateServicePoints(options.getMechanicServers(), options.getWashServers());
         }
@@ -135,7 +119,19 @@ public class EngineMod extends Engine {
             gens[i] = new CustomGen(base, speeds[i]);
         }
 
-        return new ServicePoint(gens, this.eventList, EventType.WASH_END);
+        // hard coded factors (exterior, interior, both)
+        double exterior = 0.8;
+        double interior = 1.0;
+        double both     = 1.4;
+
+        return new ServicePoint(gens, this.eventList, EventType.WASH_END,
+            (customer, serverId, base) -> switch (customer.getWashProgram()) {
+                case EXTERIOR -> base * exterior;
+                case INTERIOR -> base * interior;
+                case BOTH -> base * both;
+                default -> base;
+            }
+        );
     }
 
     private long nextSeed() {
@@ -211,78 +207,76 @@ public class EngineMod extends Engine {
 
             if (p < ext) {
                 c.setWashProgram(Customer.WashProgram.EXTERIOR);
+                this.washExteriorCount++;
             } else if (p < inter) {
                 c.setWashProgram(Customer.WashProgram.INTERIOR);
+                this.washInteriorCount++;
             } else {
                 c.setWashProgram(Customer.WashProgram.BOTH);
+                this.washBothCount++;
             }
         }
     }
 
+    /**
+     * Handle the end of service at a service point.
+     * This includes processing all customers who have finished service,
+     * starting new services if possible, and updating the visualization.
+     * @param sp Service point where the service has ended
+     * @param type Event type corresponding to the service point
+     * @param now Current simulation time
+     */
     private void handleEnd(ServicePoint sp, EventType type, double now) {
-        int finished = 0;
-
         while (true) {
             ServicePoint.EndInfo ei = sp.finishService(now);
             if (ei == null) break;
-
             Customer c = ei.customer;
-
             switch (type) {
                 case RECEPTION_END:
                     c.tReceptionEnd = now;
                     if (c.needsMechanic()) {
                         c.tMechanicQIn = now;
                         mechanic.addQueue(c);
-                        if (controller != null) {
-                            controller.visualiseCustomerToMechanic(c.getId(), mechanic.getAssignedServer(c));
-                        }
+                        if (controller != null) controller.visualiseCustomerToMechanic(c.getId(), mechanic.getAssignedServer(c));
                     } else if (c.needsWash()) {
                         c.tWashQIn = now;
                         wash.addQueue(c);
-                        if (controller != null) {
-                            controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
-                        }
+                        if (controller != null) controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
                     } else {
                         c.tDeparture = now;
-                        if (controller != null) {
-                            controller.visualiseCustomerExit(c.getId());
-                        }
+                        if (controller != null) controller.visualiseCustomerExit(c.getId());
                     }
                     break;
-
                 case MECHANIC_END:
                     if (c.needsWash()) {
                         c.tWashQIn = now;
                         wash.addQueue(c);
-                        if (controller != null) {
-                            controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
-                        }
+                        if (controller != null) controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
                     } else {
                         c.tDeparture = now;
-                        if (controller != null) {
-                            controller.visualiseCustomerExit(c.getId());
-                        }
+                        if (controller != null) controller.visualiseCustomerExit(c.getId());
                     }
                     break;
-
                 case WASH_END:
                     c.tDeparture = now;
-                    if (controller != null) {
-                        controller.visualiseCustomerExit(c.getId());
-                    }
+                    if (controller != null) controller.visualiseCustomerExit(c.getId());
                     break;
-
-                default:
-                    break;
+                default: break;
             }
-            finished++;
         }
 
-        // Generate next service events for any customers that started service
-        sp.tryStart(now);
+        // Start as many new services as possible (multi-server safe)
+        while (true) {
+            ServicePoint.StartInfo si = sp.tryStart(now);
+            if (si == null) break;
+            switch (type) {
+                case RECEPTION_END: si.customer.tReceptionStart = now;  break;
+                case MECHANIC_END:  si.customer.tMechanicStart = now;   break;
+                case WASH_END:      si.customer.tWashStart = now;       break;
+                default: break;
+            }
+        }
 
-        // Update queue lengths in visualization
         if (controller != null) {
             int receptionQueueLength = reception.getQueueLength();
             int[] mechanicQueues = mechanic.getQueueLengthsPerServer();
@@ -365,12 +359,6 @@ public class EngineMod extends Engine {
             System.out.printf("%s#%d start -> customer=%d, service=%.3f, end=%.3f%n",
                 this.labelFor(type), si.serverId, si.customer.getId(), si.serviceTime, si.endTime);
         }
-    }
-
-    private static double safeFutureTime(double candidate, double now) {
-        if (!Double.isFinite(candidate) || candidate <= now)
-            return Math.nextUp(now);
-        return candidate;
     }
 
     private String labelFor(EventType et) {

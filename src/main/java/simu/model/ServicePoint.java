@@ -23,6 +23,17 @@ public class ServicePoint {
 	// ---------- Nested types ----------
 
 	/**
+	 * Strategy interface for adjusting sampled service times.
+	 * The strategy is called after sampling the base service time from the generator,
+	 * but before scheduling the end event.
+	 * This can be used to implement per-customer or per-server adjustments.
+	 */
+	@FunctionalInterface
+	public interface ServiceTimeStrategy {
+		double adjust(Customer c, int serverId, double baseSample);
+	}
+
+	/**
 	 * Immutable DTO describing a service start decision.
 	 * - Created by {@link #tryStart(double)} when a customer is dequeued and assigned to a free server.
 	 * - Consumed by the engine to annotate the customer and for optional logging.
@@ -90,6 +101,7 @@ public class ServicePoint {
 	private final EventType endType;
 	private final int capacity;
 	private final ContinuousGenerator[] generators;
+	private final ServiceTimeStrategy timeStrategy;
 
 	// Queues (one per server)
 	private final LinkedList<QItem>[] queues;
@@ -113,59 +125,47 @@ public class ServicePoint {
 		this(gen, el, type, 1);
 	}
 
+	public ServicePoint(ContinuousGenerator gen, EventList el, EventType type, int capacity) {
+		this(gen, el, type, capacity, null);
+	}
+
 	/**
 	 * Create the service point with a waiting queue.
 	 */
-	public ServicePoint(ContinuousGenerator gen, EventList el, EventType type, int capacity) {
+	public ServicePoint(ContinuousGenerator gen, EventList el, EventType type, int capacity, ServiceTimeStrategy strategy) {
 		this.capacity = capacity;
 		this.eventList = el;
 		this.endType = type;
-
+		this.timeStrategy = strategy;
 		this.generators = new ContinuousGenerator[this.capacity];
-		for (int i = 0; i < this.capacity; i++) {
-			this.generators[i] = gen;
-		}
-
+		for (int i = 0; i < this.capacity; i++) this.generators[i] = gen;
 		this.queues = new LinkedList[this.capacity];
-		for (int i = 0; i < this.capacity; i++) {
-			this.queues[i] = new LinkedList<>();
-		}
-
+		for (int i = 0; i < this.capacity; i++) this.queues[i] = new LinkedList<>();
 		this.active = new Customer[this.capacity];
 		this.startTimes = new double[this.capacity];
 		this.endTimes = new double[this.capacity];
-
-		for (int i = 0; i < this.capacity; i++) {
-			endTimes[i] = Double.POSITIVE_INFINITY;
-		}
-
+		for (int i = 0; i < this.capacity; i++) endTimes[i] = Double.POSITIVE_INFINITY;
 		this.perServerBusy = new double[this.capacity];
 		this.perServerServed = new int[this.capacity];
 	}
 
-	/**
-	 * Multiserver service point constructor with per-server generators.
-	 */
 	public ServicePoint(ContinuousGenerator[] gens, EventList el, EventType type) {
+		this(gens, el, type, null);
+	}
+
+	public ServicePoint(ContinuousGenerator[] gens, EventList el, EventType type, ServiceTimeStrategy strategy) {
 		this.capacity = gens.length;
 		this.eventList = el;
 		this.endType = type;
-
+		this.timeStrategy = strategy;
 		this.generators = new ContinuousGenerator[this.capacity];
 		System.arraycopy(gens, 0, this.generators, 0, this.capacity);
-
 		this.queues = new LinkedList[this.capacity];
-		for (int i = 0; i < this.capacity; i++) {
-			this.queues[i] = new LinkedList<>();
-		}
-
+		for (int i = 0; i < this.capacity; i++) this.queues[i] = new LinkedList<>();
 		this.active = new Customer[this.capacity];
 		this.startTimes = new double[this.capacity];
 		this.endTimes = new double[this.capacity];
-		for (int i = 0; i < this.capacity; i++) {
-			endTimes[i] = Double.POSITIVE_INFINITY;
-		}
-
+		for (int i = 0; i < this.capacity; i++) endTimes[i] = Double.POSITIVE_INFINITY;
 		this.perServerBusy = new double[this.capacity];
 		this.perServerServed = new int[this.capacity];
 	}
@@ -215,7 +215,9 @@ public class ServicePoint {
 				double wait = Math.max(0.0, now - qi.enqueuedAt);
 				this.totalWaitTime += wait;
 
-				double serviceTime = this.generators[sid] != null ? this.generators[sid].sample() : 0.0;
+				double baseSample = this.generators[sid] != null ? this.generators[sid].sample() : 0.0;
+				double serviceTime = (timeStrategy != null) ? timeStrategy.adjust(c, sid, baseSample) : baseSample;
+
 				double end = now + serviceTime;
 				if (end <= now) end = Math.nextUp(now); // simple safeguard
 
@@ -233,6 +235,13 @@ public class ServicePoint {
 
 	// ---------- Finish logic ----------
 
+	/**
+	 * Finish the next service that is done at or before `now`.
+	 * If multiple services finish at the same time, the one with the lowest server ID is chosen.
+	 * If no service is done yet, returns null.
+	 * @param now current simulation time
+	 * @return info about the finished service, or null if none was finished
+	 */
 	public EndInfo finishService(double now) {
 		int sid = this.findEarliestFinished(now);
 		if (sid < 0) return null;
@@ -253,6 +262,13 @@ public class ServicePoint {
 		return new EndInfo(c, sid, start, end);
 	}
 
+	/**
+	 * Find the server that has finished its service the earliest (at or before `now`).
+	 * If multiple servers finished at the same time, the one with the lowest server ID is chosen.
+	 * If no server has finished yet, returns -1.
+	 * @param now current simulation time
+	 * @return index of the server that finished earliest, or -1 if none
+	 */
 	private int findEarliestFinished(double now) {
 		int best = -1;
 		double bestEnd = Double.POSITIVE_INFINITY;
@@ -273,6 +289,11 @@ public class ServicePoint {
 
 	// ---------- Info for engine ----------
 
+	/**
+	 * Check how many servers are idle and have a waiting customer.
+	 * This is used by the engine to decide whether to try starting a new service.
+	 * @return number of servers that can start a new service now
+	 */
 	public int availableSlots() {
 		int free = 0;
 		for (int i = 0; i < this.capacity; i++) {
@@ -283,57 +304,8 @@ public class ServicePoint {
 		return free;
 	}
 
-	public double nextEndTime() {
-		double best = Double.POSITIVE_INFINITY;
-		for (int i = 0; i < this.capacity; i++) {
-			if (this.active[i] != null && this.endTimes[i] < best) {
-				best = this.endTimes[i];
-			}
-		}
-		return best;
-	}
-
-	public int queueSize() {
-		int sum = 0;
-		for (LinkedList<QItem> q : this.queues) sum += q.size();
-		return sum;
-	}
-
-
-	// ---------- Snapshot helpers ----------
-
-	public int[] getPerServerQueueLengthsSnapshot() {
-		int[] q = new int[this.capacity];
-		for (int i = 0; i < this.capacity; i++) {
-			q[i] = this.queues[i].size();
-		}
-		return q;
-	}
-
-	public boolean[] getPerServerBusyFlagsSnapshot() {
-		boolean[] b = new boolean[this.capacity];
-		for (int i = 0; i < this.capacity; i++) {
-			b[i] = this.active[i] != null;
-		}
-		return b;
-	}
-
 
 	// ---------- Getters and analytics ----------
-
-	public int getBusyServerCount() {
-		int cnt = 0;
-		for (Customer c : this.active) if (c != null) cnt++;
-		return cnt;
-	}
-
-	public boolean isBusy() {
-		return this.getBusyServerCount() > 0;
-	}
-
-	public int getQueueLength() {
-		return queueSize();
-	}
 
 	public int getServedCount() { return this.served; }
 	public int getCapacity() { return this.capacity; }
@@ -342,11 +314,20 @@ public class ServicePoint {
 	public double getAverageWaitTime() { return this.served > 0 ? this.totalWaitTime / this.served : 0.0; }
 	public double getTotalWaitTime() { return this.totalWaitTime; }
 
+	/**
+	 * Get a snapshot of how much time each server has been busy.
+	 * @return array of length `capacity` with per-server busy times
+	 */
 	public double[] getPerServerBusyTimeSnapshot() {
 		double[] copy = new double[this.perServerBusy.length];
 		System.arraycopy(this.perServerBusy, 0, copy, 0, copy.length);
 		return copy;
 	}
+
+	/**
+	 * Get a snapshot of how many customers each server has served.
+	 * @return array of length `capacity` with per-server served counts
+	 */
 	public int[] getPerServerServedSnapshot() {
 		int[] copy = new int[this.perServerServed.length];
 		System.arraycopy(this.perServerServed, 0, copy, 0, copy.length);

@@ -21,7 +21,7 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
     /* Engine control: */
     @Override
     public void startSimulation() {
-        engine = new EngineMod(this, params); // Pass SimParameters to EngineMod
+        engine = new EngineMod(params.toConfig(),this); // Pass SimParameters to EngineMod
         engine.setSimulationTime(ui.getTime());
         engine.setDelay(ui.getDelay());
         // Update visualization with initial service point configuration
