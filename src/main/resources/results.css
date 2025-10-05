@@ -1,0 +1,85 @@
+.results-root {
+    -fx-background-color: linear-gradient(to bottom,#1e1f22,#25282b);
+    -fx-font-family: "Segoe UI","System";
+    -fx-text-fill: #ffffff;
+}
+
+.results-heading {
+    -fx-text-fill: #ffffff;
+}
+
+.results-block {
+    -fx-background-color: #32363a;
+    -fx-padding: 14 18;
+    -fx-background-radius: 12;
+    -fx-font-size: 16px;
+}
+
+.results-block-title {
+    -fx-text-fill: #ffffff;
+    -fx-letter-spacing: 0.5px;
+    -fx-font-size: 18px;
+}
+
+.results-metric {
+    -fx-text-fill: #d0d4d8;
+    -fx-font-size: 16px;
+}
+
+.results-table {
+    -fx-background-color: transparent;
+    -fx-border-color: #3b4044;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+.table-view .column-header, .table-view .filler {
+    -fx-background-color: linear-gradient(to bottom,#454b50,#3b4044);
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: #f3f3f3;
+    -fx-font-weight: bold;
+    -fx-font-size: 16px;
+}
+
+.table-row-cell {
+    -fx-cell-size: 30px;
+    -fx-font-size: 14px;
+}
+
+.table-row-cell:even {
+    -fx-background-color: #262a2d;
+}
+
+.table-row-cell:odd {
+    -fx-background-color: #2f3336;
+}
+
+.table-cell {
+    -fx-text-fill: #e6e9ec;
+    -fx-padding: 4 8 4 8;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #58616a;
+    -fx-text-fill: white;
+}
+
+.table-row-cell:selected .table-cell {
+    -fx-text-fill: white;
+}
+
+.results-close-btn {
+    -fx-background-color: linear-gradient(to right,#d14b31,#b8321a);
+    -fx-text-fill: white;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 10;
+    -fx-padding: 10 26;
+    -fx-cursor: hand;
+}
+
+.results-close-btn:hover {
+    -fx-background-color: linear-gradient(to right,#e6593c,#c63a20);
+}

@@ -1,5 +1,7 @@
 package simu.controller;
 
+import simu.model.SimulationData;
+
 /* interface for the engine */
 public interface IControllerMtoV {
     public void showEndTime(double time);
@@ -9,4 +11,5 @@ public interface IControllerMtoV {
     public void visualiseCustomerExit(int id);
     public void updateServicePoints(int numMechanics, int numWashers);
     public void updateQueueLengths(int receptionQueue, int[] mechanicQueues, int[] washerQueues);
+    public void simulationFinished(double endTime, SimulationData data);
 }

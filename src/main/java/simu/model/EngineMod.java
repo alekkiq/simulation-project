@@ -190,8 +190,6 @@ public class EngineMod extends Engine {
     /**
      * Decide the routing for the customer after reception
      * @param c Customer whose routing is to be decided
-     *
-     * TODO: parameterize the probabilities
      */
     private void decideRouting(Customer c) {
         boolean mech = this.rng.nextDouble() < this.options.getProbNeedsMechanic();
@@ -305,23 +303,14 @@ public class EngineMod extends Engine {
         }
     }
 
-    /**
-     * Process the departure of the customer from the system
-     * @param c Customer who is departing
-     * @param now Current simulation time
-     */
-    private void depart(Customer c, double now) {
-        c.tDeparture = now;
-        c.setRemovalTime(now);
-        c.reportResults();
-    }
-
     @Override
     protected void results() {
         double now = Clock.getInstance().getClock();
 
+        SimulationData data = SimulationData.from(now, this.reception, this.mechanic, this.wash);
+
         if (this.controller != null) {
-            this.controller.showEndTime(now);
+            this.controller.simulationFinished(now, data);
         }
 
         System.out.println("\n--- Final statistics ---");
@@ -355,19 +344,6 @@ public class EngineMod extends Engine {
                 case WASH_END:      si.customer.tWashStart = now;       break;
                 default: break;
             }
-
-            System.out.printf("%s#%d start -> customer=%d, service=%.3f, end=%.3f%n",
-                this.labelFor(type), si.serverId, si.customer.getId(), si.serviceTime, si.endTime);
-        }
-    }
-
-    private String labelFor(EventType et) {
-        switch (et) {
-            case RECEPTION_END: return "Reception";
-            case MECHANIC_END:  return "Mechanic";
-            case WASH_END:      return "Wash";
-            case ARRIVAL:       return "Arrival";
-            default:            return et.name();
         }
     }
 

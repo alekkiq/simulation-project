@@ -138,13 +138,22 @@ public class ServicePoint {
 		this.endType = type;
 		this.timeStrategy = strategy;
 		this.generators = new ContinuousGenerator[this.capacity];
-		for (int i = 0; i < this.capacity; i++) this.generators[i] = gen;
+
+		for (int i = 0; i < this.capacity; i++)
+			this.generators[i] = gen;
+
 		this.queues = new LinkedList[this.capacity];
-		for (int i = 0; i < this.capacity; i++) this.queues[i] = new LinkedList<>();
+
+		for (int i = 0; i < this.capacity; i++)
+			this.queues[i] = new LinkedList<>();
+
 		this.active = new Customer[this.capacity];
 		this.startTimes = new double[this.capacity];
 		this.endTimes = new double[this.capacity];
-		for (int i = 0; i < this.capacity; i++) endTimes[i] = Double.POSITIVE_INFINITY;
+
+		for (int i = 0; i < this.capacity; i++)
+			endTimes[i] = Double.POSITIVE_INFINITY;
+
 		this.perServerBusy = new double[this.capacity];
 		this.perServerServed = new int[this.capacity];
 	}
@@ -159,13 +168,20 @@ public class ServicePoint {
 		this.endType = type;
 		this.timeStrategy = strategy;
 		this.generators = new ContinuousGenerator[this.capacity];
+
 		System.arraycopy(gens, 0, this.generators, 0, this.capacity);
 		this.queues = new LinkedList[this.capacity];
-		for (int i = 0; i < this.capacity; i++) this.queues[i] = new LinkedList<>();
+
+		for (int i = 0; i < this.capacity; i++)
+			this.queues[i] = new LinkedList<>();
+
 		this.active = new Customer[this.capacity];
 		this.startTimes = new double[this.capacity];
 		this.endTimes = new double[this.capacity];
-		for (int i = 0; i < this.capacity; i++) endTimes[i] = Double.POSITIVE_INFINITY;
+
+		for (int i = 0; i < this.capacity; i++)
+			endTimes[i] = Double.POSITIVE_INFINITY;
+
 		this.perServerBusy = new double[this.capacity];
 		this.perServerServed = new int[this.capacity];
 	}

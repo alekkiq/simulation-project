@@ -1,5 +1,7 @@
 package simu.view;
 
+import simu.model.SimulationData;
+
 public interface ISimulatorUI {
 	// The Controller needs input which is passed to the Engine
 	public double getTime();
@@ -10,4 +12,6 @@ public interface ISimulatorUI {
 	
 	// Controller requires
 	public IVisualisation getVisualisation();
+
+	public void onSimulationFinished(double endTime, SimulationData data);
 }

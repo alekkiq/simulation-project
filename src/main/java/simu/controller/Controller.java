@@ -2,9 +2,12 @@ package simu.controller;
 
 import javafx.application.Platform;
 import simu.config.SimulationOptions;
+import simu.database.SimulationDataDAO;
+import simu.framework.Clock;
 import simu.framework.IEngine;
 import simu.model.EngineMod;
 import simu.model.SimParameters;
+import simu.model.SimulationData;
 import simu.view.ISimulatorUI;
 import simu.view.Visualisation;
 
@@ -12,6 +15,7 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 	private EngineMod engine;
 	private ISimulatorUI ui;
     private SimParameters params;
+    private SimulationDataDAO dao = new SimulationDataDAO();
 
     public Controller(ISimulatorUI ui, SimParameters params) {
         this.ui = ui;
@@ -21,11 +25,15 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
     /* Engine control: */
     @Override
     public void startSimulation() {
-        engine = new EngineMod(params.toConfig(),this); // Pass SimParameters to EngineMod
+        Clock.getInstance().setClock(0.0); // reset clock so that multiple simulations work correctly
+
+        SimulationOptions options = params.toConfig();
+
+        engine = new EngineMod(options,this); // Pass SimParameters to EngineMod
         engine.setSimulationTime(ui.getTime());
         engine.setDelay(ui.getDelay());
         // Update visualization with initial service point configuration
-        updateServicePoints(params.numMechanicsProperty().get(), params.numWashersProperty().get());
+        updateServicePoints(options.getMechanicServers(), options.getWashServers());
         ui.getVisualisation().clearDisplay();
         ((Thread) engine).start();
     }
@@ -38,6 +46,22 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
     @Override
     public void increaseSpeed() { // nopeutetaan moottorisäiettä
         engine.setDelay((long)(engine.getDelay()*0.9));
+    }
+
+    @Override
+    public void simulationFinished(double endTime, SimulationData data) {
+        Platform.runLater(() -> ui.onSimulationFinished(endTime, data));
+
+        Thread t = new Thread(() -> {
+           try {
+               dao.persist(data);
+           } catch (Exception e) {
+               // TODO: more graceful error handling (e.g. alert in UI)
+               e.printStackTrace();
+           }
+        }, "db-persist-thread");
+        t.setDaemon(true);
+        t.start();
     }
 
 

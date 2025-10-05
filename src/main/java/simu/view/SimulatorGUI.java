@@ -21,6 +21,7 @@ import simu.controller.IControllerVtoM;
 import simu.framework.Trace;
 import simu.framework.Trace.Level;
 import simu.model.SimParameters;
+import simu.model.SimulationData;
 
 public class SimulatorGUI extends Application implements ISimulatorUI {
 
@@ -55,6 +56,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
     // --- Visualization ---
     private Visualisation visualisation;
+    private Stage primaryStage;
 
     // -------- helpers --------
     private static Slider makeProbSlider(double def) {
@@ -192,7 +194,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
         int r = 0;
 
-// --- Section: General Options ---
+        // --- Section: General Options ---
         form.add(sectionHeader("General Options"), 0, r++, 2, 1);
         form.add(field("Simulation duration", simulationDurationSpinner), 0, r);
         form.add(field("UI delay (ms)", uiDelaySpinner),                 1, r++);
@@ -200,7 +202,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         form.add(field("Number of Mechanics", numMechanicsSpinner), 0, r);
         form.add(field("Number of Washers",   numWashersSpinner),   1, r++);
 
-// --- Section: Customer Probabilities ---
+        // --- Section: Customer Probabilities ---
         form.add(sectionHeader("Customer Probabilities"), 0, r++, 2, 1);
         form.add(fieldWithValue("P(Needs Mechanic)", probNeedsMechanicSlider, "%.0f%%", 100), 0, r);
         form.add(fieldWithValue("P(Needs Wash)",     probNeedsWashSlider,     "%.0f%%", 100), 1, r++);
@@ -210,19 +212,19 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         form.add(fieldWithValue("Wash: Both",     probWashBothSlider,     "%.0f%%", 100), 0, r);
         form.add(field("Wash split sum", washSplitSumLabel),             1, r++);
 
-// --- Section: Distribution Options ---
+        // --- Section: Distribution Options ---
         form.add(sectionHeader("Distribution Options"), 0, r++, 2, 1);
         form.add(field("Inter-arrival",       editInterBtn),     0, r);
         form.add(field("Reception service",   editReceptionBtn), 1, r++);
         form.add(field("Mechanic service",    editMechanicBtn),  0, r);
         form.add(field("Wash service",        editWashBtn),      1, r++);
 
-// --- Section: Service Point Speed Factors ---
+        // --- Section: Service Point Speed Factors ---
         form.add(sectionHeader("Service Point Speed Factors"), 0, r++, 2, 1);
         form.add(labeledBox("Mechanic speeds (0.5x–2.0x)", mechanicSpeedsBox), 0, r++, 2, 1);
         form.add(labeledBox("Washer speeds (0.5x–2.0x)",   washerSpeedsBox),   0, r++, 2, 1);
 
-// --- Start button ---
+        // --- Start button ---
         Button startButton = new Button("Start Simulation");
         startButton.setPrefWidth(220);
         startButton.getStyleClass().add("primary");
@@ -268,6 +270,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
         Scene scene = new Scene(root, 900, 900);
         // style: load stylesheet
+        primaryStage = stage; // save for owner reference for modals
         scene.getStylesheets().add("styles.css");
 
         stage.setTitle("Car Kosovo Simulator");
@@ -402,73 +405,26 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
     public long getDelay() { return params.uiDelayMsProperty().get(); }
 
     @Override
-    public void setEndingTime(double time) {
-        Platform.runLater(() -> {
-            // Show final statistics on the canvas
-            String stats = "--- Final statistics ---\n" +
-                "Reception: servers=1, served=62, avgWait=13.867, avgService=11.670, avgTotal=25.537, util=70.7%\n" +
-                "Mechanic: servers=3, served=36, avgWait=1.617, avgService=29.874, avgTotal=31.491, util=35.0%\n" +
-                "  Mechanic #1: served=19, busy=593.376, util=58.0%\n" +
-                "  Mechanic #2: served=12, busy=307.779, util=30.1%\n" +
-                "  Mechanic #3: served=5, busy=174.310, util=17.0%\n" +
-                "Wash: servers=3, served=37, avgWait=0.000, avgService=18.581, avgTotal=18.581, util=22.4%\n" +
-                "  Wash #1: served=27, busy=485.054, util=47.4%\n" +
-                "  Wash #2: served=7, busy=192.021, util=18.8%\n" +
-                "  Wash #3: served=3, busy=10.414, util=1.0%";
-            visualisation.showFinalStatistics(stats);
-
-            // Create close button with matching style
-            Button closeButton = new Button("Close Simulation");
-            closeButton.setPrefWidth(220); // Same width as start button
-            closeButton.setPrefHeight(40); // Taller button
-            closeButton.setStyle("""
-                -fx-font-size: 14px;
-                -fx-font-weight: bold;
-                -fx-background-color: #CD4527;
-                -fx-text-fill: white;
-                -fx-border-radius: 5;
-                -fx-background-radius: 5;
-                """);
-
-            closeButton.setOnAction(e -> {
-                // Close all windows and exit application
-                Platform.exit();
-                System.exit(0);
-            });
-
-            // Style button hover effect
-            closeButton.setOnMouseEntered(e ->
-                closeButton.setStyle("""
-                    -fx-font-size: 14px;
-                    -fx-font-weight: bold;
-                    -fx-background-color: #E45535;
-                    -fx-text-fill: white;
-                    -fx-border-radius: 5;
-                    -fx-background-radius: 5;
-                    """)
-            );
-
-            closeButton.setOnMouseExited(e ->
-                closeButton.setStyle("""
-                    -fx-font-size: 14px;
-                    -fx-font-weight: bold;
-                    -fx-background-color: #CD4527;
-                    -fx-text-fill: white;
-                    -fx-border-radius: 5;
-                    -fx-background-radius: 5;
-                    """)
-            );
-
-            // Add close button to the visualization window with padding
-            VBox root = (VBox) visualisation.getParent();
-            root.getChildren().add(closeButton);
-            VBox.setMargin(closeButton, new Insets(0, 0, 20, 0)); // Add bottom margin
-        });
-    }
+    public void setEndingTime(double time) {}
 
     @Override
     public IVisualisation getVisualisation() {
         return visualisation;
+    }
+
+    @Override
+    public void onSimulationFinished(double endTime, SimulationData data) {
+        if (primaryStage != null) {
+            primaryStage.hide();
+        }
+
+        ResultsView resultsView = new ResultsView(primaryStage, data, () -> {
+           if (primaryStage != null) {
+                primaryStage.show();
+           }
+        });
+
+        resultsView.show();
     }
 
     public static void main(String[] args) { launch(args); }
