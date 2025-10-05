@@ -32,7 +32,7 @@ public class ResultsView {
         root.setPadding(new Insets(25));
         root.getStyleClass().add("results-root");
 
-        Label heading = new Label("Simulation Results");
+        Label heading = new Label("Simulation Results (time " + String.format("%.3f", data.getSimulationLength()) + " units)");
         heading.setFont(Font.font("System", FontWeight.BOLD, 28));
         heading.getStyleClass().add("results-heading");
 

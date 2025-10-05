@@ -24,7 +24,9 @@ public class SimulationData {
     private final double washAvgTotal;
     private final double washUtil;
 
-    // --- Per-server fields (not persisted) ---
+    // --- Not persisted fields ---
+    private final double simulationLength;
+
     private final int[] mechanicServedPerServer;
     private final double[] mechanicUtilPerServer;  // 0..1
     private final int[] washServedPerServer;
@@ -38,6 +40,7 @@ public class SimulationData {
     private final double[] washAvgTotalPerServer;
 
     private SimulationData(
+            double simulationLength,
             int receptionServers, int receptionServed,
             double receptionAvgWait, double receptionAvgService, double receptionAvgTotal, double receptionUtil,
             int mechanicServers, int mechanicServed,
@@ -49,6 +52,8 @@ public class SimulationData {
             double[] mechanicAvgWaitPerServer, double[] mechanicAvgServicePerServer, double[] mechanicAvgTotalPerServer,
             double[] washAvgWaitPerServer, double[] washAvgServicePerServer, double[] washAvgTotalPerServer
     ) {
+        this.simulationLength = simulationLength;
+
         this.receptionServers = receptionServers;
         this.receptionServed = receptionServed;
         this.receptionAvgWait = receptionAvgWait;
@@ -124,6 +129,7 @@ public class SimulationData {
         double[] wAvgTotalPer = wash.getPerServerAverageTotalTimes();
 
         return new SimulationData(
+                now,
                 rCap, rServed, rAvgWait, rAvgService, rAvgTotal, rUtil,
                 mCap, mServed, mAvgWait, mAvgService, mAvgTotal, mUtil,
                 wCap, wServed, wAvgWait, wAvgService, wAvgTotal, wUtil,
@@ -161,6 +167,7 @@ public class SimulationData {
     public int[] getWashServedPerServer() { return washServedPerServer.clone(); }
     public double[] getWashUtilPerServer() { return washUtilPerServer.clone(); }
 
+    public double getSimulationLength() { return simulationLength; }
     public double[] getMechanicAvgWaitPerServer() { return mechanicAvgWaitPerServer.clone(); }
     public double[] getMechanicAvgServicePerServer() { return mechanicAvgServicePerServer.clone(); }
     public double[] getMechanicAvgTotalPerServer() { return mechanicAvgTotalPerServer.clone(); }

@@ -4,6 +4,8 @@ public class Customer {
     private int id;
     private double x;
     private double y;
+    boolean visitedMechanic = false;
+    boolean afterMechanicInWasher = false;
 
     public Customer(int id, double x, double y) {
         this.id = id;

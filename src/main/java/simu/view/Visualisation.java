@@ -29,6 +29,7 @@ public class Visualisation extends Canvas implements IVisualisation {
     private static final Color WASHER_COLOR = Color.web("#E57373");     // Material Red
     private static final Color EXIT_COLOR = Color.web("#90A4AE");       // Material Gray
     private static final Color CUSTOMER_COLOR = Color.web("#FFA000");   // Material Amber
+    private static final Color CUSTOMER_POST_MECH_COLOR = Color.web("#000000"); // Black
     private static final Color TEXT_COLOR = Color.web("#37474F");       // Dark Gray
     private static final Color LINE_COLOR = Color.web("#BDBDBD");       // Light Gray
 
@@ -56,8 +57,6 @@ public class Visualisation extends Canvas implements IVisualisation {
         }
     }
 
-    private String finalStatsText = null;
-
     public Visualisation(int w, int h) {
         super(w, h);
         gc = this.getGraphicsContext2D();
@@ -69,7 +68,6 @@ public class Visualisation extends Canvas implements IVisualisation {
         receptionQueue.clear();
         mechanicQueues.values().forEach(List::clear);
         washerQueues.values().forEach(List::clear);
-        finalStatsText = null;
         clearDisplay();
     }
 
@@ -87,17 +85,9 @@ public class Visualisation extends Canvas implements IVisualisation {
         clearAndRedraw();
     }
 
-    private boolean isShowingStats() {
-        return finalStatsText != null && !finalStatsText.isEmpty();
-    }
-
     @Override
     public void clearDisplay() {
         setupCanvas();
-        if (isShowingStats()) {
-            drawFinalStatistics();
-            return;
-        }
         gc.setFill(BACKGROUND_COLOR);
         gc.fillRect(0, 0, this.getWidth(), this.getHeight());
         drawServicePoints();
@@ -266,64 +256,6 @@ public class Visualisation extends Canvas implements IVisualisation {
         clearDisplay();
     }
 
-    private void drawFinalStatistics() {
-        if (finalStatsText != null && !finalStatsText.isEmpty()) {
-            double width = getWidth();
-            double height = getHeight();
-            gc.setFill(Color.web("#2B2B2B"));
-            gc.fillRect(0, 0, width, height);
-
-            // Card background
-            double cardPadX = 60;
-            double cardPadY = 60;
-            double cardWidth = width - 2 * cardPadX;
-            double cardHeight = height - 2 * cardPadY;
-            gc.setFill(Color.rgb(40,40,40,0.92));
-            gc.fillRoundRect(cardPadX, cardPadY, cardWidth, cardHeight, 40, 40);
-            gc.setStroke(Color.web("#CD4527"));
-            gc.setLineWidth(8);
-            gc.strokeRoundRect(cardPadX, cardPadY, cardWidth, cardHeight, 40, 40);
-
-            // Prepare text
-            String[] lines = finalStatsText.split("\\n");
-            double maxTextWidth = cardWidth - 40;
-            double maxTextHeight = cardHeight - 40;
-            double fontSize = 32;
-            Font statsFont;
-            boolean fits = false;
-            while (fontSize > 14 && !fits) {
-                statsFont = Font.font("System", FontWeight.BOLD, fontSize);
-                double widest = 0;
-                for (String line : lines) {
-                    Text textNode = new Text(line);
-                    textNode.setFont(statsFont);
-                    widest = Math.max(widest, textNode.getLayoutBounds().getWidth());
-                }
-                double totalHeight = lines.length * (fontSize + 12);
-                if (widest <= maxTextWidth && totalHeight <= maxTextHeight) {
-                    fits = true;
-                } else {
-                    fontSize -= 2;
-                }
-            }
-            statsFont = Font.font("System", FontWeight.BOLD, fontSize);
-            gc.setFont(statsFont);
-            gc.setFill(Color.WHITE);
-            double lineHeight = fontSize + 12;
-            double totalHeight = lines.length * lineHeight;
-            double startY = cardPadY + (cardHeight - totalHeight) / 2 + lineHeight;
-            for (int i = 0; i < lines.length; i++) {
-                String line = lines[i];
-                Text textNode = new Text(line);
-                textNode.setFont(statsFont);
-                double textWidth = textNode.getLayoutBounds().getWidth();
-                double x = cardPadX + (cardWidth - textWidth) / 2;
-                double y = startY + i * lineHeight;
-                gc.fillText(line, x, y);
-            }
-        }
-    }
-
     private void drawQueueInfo() {
         gc.setFont(Font.font("System", FontWeight.BOLD, 12));
         gc.setFill(TEXT_COLOR);
@@ -356,10 +288,14 @@ public class Visualisation extends Canvas implements IVisualisation {
         gc.fillOval(x - HALF_CUSTOMER + 2, y - HALF_CUSTOMER + 2,
                     CUSTOMER_SIZE, CUSTOMER_SIZE);
 
+        Color base = (customer.afterMechanicInWasher)
+                ? CUSTOMER_POST_MECH_COLOR
+                : CUSTOMER_COLOR;
+
         // Create gradient for customer
         Stop[] stops = new Stop[]{
-            new Stop(0, CUSTOMER_COLOR.brighter()),
-            new Stop(1, CUSTOMER_COLOR.darker())
+            new Stop(0, base.brighter()),
+            new Stop(1, base.darker())
         };
         RadialGradient gradient = new RadialGradient(
             0, 0, x, y, HALF_CUSTOMER,
@@ -379,10 +315,6 @@ public class Visualisation extends Canvas implements IVisualisation {
     }
 
     private void clearAndRedraw() {
-        if (isShowingStats()) {
-            clearDisplay(); // Only draw stats, nothing else
-            return;
-        }
         clearDisplay();
         // Draw all customers in their current positions
         for (Customer customer : customers.values()) {
@@ -401,7 +333,10 @@ public class Visualisation extends Canvas implements IVisualisation {
 
                 Position pos = mechanicPositions.get(mechanicId);
                 customer.setPosition(pos.x, pos.y);
+
                 mechanicQueues.get(mechanicId).add(customer);
+
+                customer.visitedMechanic = true;
                 clearAndRedraw();
             }
         }
@@ -416,6 +351,11 @@ public class Visualisation extends Canvas implements IVisualisation {
 
                 Position pos = washerPositions.get(washerId);
                 customer.setPosition(pos.x, pos.y);
+
+                if (customer.visitedMechanic) {
+                    customer.afterMechanicInWasher = true;
+                }
+
                 washerQueues.get(washerId).add(customer);
                 clearAndRedraw();
             }
