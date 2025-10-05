@@ -3,11 +3,16 @@ package simu.database;
 
 import simu.model.SimulationData;
 import java.sql.*;
-import java.util.*;
 
 public class SimulationDataDAO {
     public void persist(SimulationData data) {
         Connection conn = MariaDBConnection.getConnection();
+
+        if (conn == null) {
+            System.out.println("No database connection.");
+            return;
+        }
+
         String sql = "INSERT INTO simulation_data (" +
                 "receptionServed, receptionServers, receptionAvgWait, receptionAvgService, receptionAvgTotal, receptionUtil, " +
                 "mechanicServed, mechanicServers, mechanicAvgWait, mechanicAvgService, mechanicAvgTotal, mechanicUtil, " +
