@@ -5,7 +5,6 @@ import simu.config.SimulationOptions;
 import simu.controller.IControllerMtoV;
 import simu.framework.*;
 
-import java.util.List;
 import java.util.Random;
 
 public class EngineMod extends Engine {
@@ -24,13 +23,6 @@ public class EngineMod extends Engine {
     // contains all the parameters for the simulation
     // like number of servers, distributions, probabilities, etc.
     private SimulationOptions options;
-
-    // snapshot fields
-    private ISnapshotListener snapshotListener;
-    private long lastUiPushMillis = 0;
-    private static final long UI_PUSH_INTERVAL_MS = 120; // tweak
-    private long totalArrived = 0;
-    private long totalServed = 0;
 
     // controller
     private IControllerMtoV controller;
@@ -78,6 +70,33 @@ public class EngineMod extends Engine {
         this.mechanic  = buildMechanic(options);
         this.wash      = buildWash(options);
         this.arrivals  = buildArrivals(options);
+    }
+
+    public EngineMod(IControllerMtoV controller, SimParameters params) {
+        // Start with default options to ensure all distributions are initialized
+        this.options = SimulationOptions.defaults();
+        this.controller = controller;
+
+        // Update options from params while keeping the default distributions
+        options.setMechanicServers(params.numMechanicsProperty().get());
+        options.setWashServers(params.numWashersProperty().get());
+        options.setProbNeedsMechanic(params.pNeedsMechanicProperty().get());
+        options.setProbNeedsWash(params.pNeedsWashProperty().get());
+        options.setWashProbExterior(params.pWashExteriorProperty().get());
+        options.setWashProbInterior(params.pWashInteriorProperty().get());
+        options.setWashProbBoth(params.pWashBothProperty().get());
+
+        // Initialize services
+        this.rng = new Random(options.getBaseRandomSeed());
+        this.reception = buildReception(options);
+        this.mechanic = buildMechanic(options);
+        this.wash = buildWash(options);
+        this.arrivals = buildArrivals(options);
+
+        // Update visualization with initial configuration
+        if (controller != null) {
+            controller.updateServicePoints(options.getMechanicServers(), options.getWashServers());
+        }
     }
 
 
@@ -129,7 +148,6 @@ public class EngineMod extends Engine {
     @Override
     protected void initialize() {
         this.arrivals.generateNextEvent();
-        this.maybePushSnapshot();
     }
 
     @Override
@@ -149,7 +167,6 @@ public class EngineMod extends Engine {
                 this.decideRouting(c);
                 c.tReceptionQIn = now;
                 this.reception.addQueue(c);
-                this.totalArrived++;
 
                 if (this.controller != null) {
                     this.controller.visualiseCustomer();
@@ -172,7 +189,6 @@ public class EngineMod extends Engine {
             }
             default: break;
         }
-        this.maybePushSnapshot();
     }
 
     /**
@@ -208,10 +224,8 @@ public class EngineMod extends Engine {
 
         while (true) {
             ServicePoint.EndInfo ei = sp.finishService(now);
-
             if (ei == null) break;
 
-            finished++;
             Customer c = ei.customer;
 
             switch (type) {
@@ -219,39 +233,61 @@ public class EngineMod extends Engine {
                     c.tReceptionEnd = now;
                     if (c.needsMechanic()) {
                         c.tMechanicQIn = now;
-                        this.mechanic.addQueue(c);
+                        mechanic.addQueue(c);
+                        if (controller != null) {
+                            controller.visualiseCustomerToMechanic(c.getId(), mechanic.getAssignedServer(c));
+                        }
                     } else if (c.needsWash()) {
                         c.tWashQIn = now;
-                        this.wash.addQueue(c);
+                        wash.addQueue(c);
+                        if (controller != null) {
+                            controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
+                        }
                     } else {
-                        this.depart(c, now);
+                        c.tDeparture = now;
+                        if (controller != null) {
+                            controller.visualiseCustomerExit(c.getId());
+                        }
                     }
                     break;
 
                 case MECHANIC_END:
-                    c.tMechanicEnd = now;
-                    if (c.needsWash() && c.tWashEnd <= 0) {
+                    if (c.needsWash()) {
                         c.tWashQIn = now;
-                        this.wash.addQueue(c);
+                        wash.addQueue(c);
+                        if (controller != null) {
+                            controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
+                        }
                     } else {
-                        this.depart(c, now);
+                        c.tDeparture = now;
+                        if (controller != null) {
+                            controller.visualiseCustomerExit(c.getId());
+                        }
                     }
                     break;
 
                 case WASH_END:
-                    c.tWashEnd = now;
-                    this.depart(c, now);
+                    c.tDeparture = now;
+                    if (controller != null) {
+                        controller.visualiseCustomerExit(c.getId());
+                    }
                     break;
 
-                default: break;
+                default:
+                    break;
             }
+            finished++;
         }
-        if (finished == 0) {
-            double tnext = sp.nextEndTime();
-            if (Double.isFinite(tnext)) {
-                tnext = safeFutureTime(tnext, now);
-                this.eventList.add(new Event(type, tnext));
-            }
+
+        // Generate next service events for any customers that started service
+        sp.tryStart(now);
+
+        // Update queue lengths in visualization
+        if (controller != null) {
+            int receptionQueueLength = reception.getQueueLength();
+            int[] mechanicQueues = mechanic.getQueueLengthsPerServer();
+            int[] washerQueues = wash.getQueueLengthsPerServer();
+            controller.updateQueueLengths(receptionQueueLength, mechanicQueues, washerQueues);
         }
     }
 
@@ -266,7 +302,13 @@ public class EngineMod extends Engine {
         this.startIfPossible(this.mechanic,  EventType.MECHANIC_END,  now);
         this.startIfPossible(this.wash,      EventType.WASH_END,      now);
 
-        this.maybePushSnapshot();
+        // Update queue lengths in visualization
+        if (controller != null) {
+            int receptionQueueLength = reception.getQueueLength();
+            int[] mechanicQueues = mechanic.getQueueLengthsPerServer();
+            int[] washerQueues = wash.getQueueLengthsPerServer();
+            controller.updateQueueLengths(receptionQueueLength, mechanicQueues, washerQueues);
+        }
     }
 
     /**
@@ -278,7 +320,6 @@ public class EngineMod extends Engine {
         c.tDeparture = now;
         c.setRemovalTime(now);
         c.reportResults();
-        this.totalServed++;
     }
 
     @Override
@@ -295,68 +336,6 @@ public class EngineMod extends Engine {
         this.printPointWithServers("Wash", this.wash, now);
     }
 
-
-    // ---------- Snapshot for UI ----------
-    public void setSnapshotListener(ISnapshotListener l) {
-        this.snapshotListener = l;
-    }
-
-    private void maybePushSnapshot() {
-        long nowWall = System.currentTimeMillis();
-        if (this.snapshotListener != null &&
-                (this.lastUiPushMillis == 0 || nowWall - this.lastUiPushMillis >= UI_PUSH_INTERVAL_MS)) {
-            this.lastUiPushMillis = nowWall;
-            this.snapshotListener.onSnapshot(buildSnapshot());
-        }
-    }
-
-    private SimulationSnapshot buildSnapshot() {
-        double now = Clock.getInstance().getClock();
-        List<SimulationSnapshot.ServicePointState> sps = List.of(
-                snapshotFor("Reception", reception, now),
-                snapshotFor("Mechanic", mechanic, now),
-                snapshotFor("Wash", wash, now)
-        );
-        return new SimulationSnapshot(now, totalArrived, totalServed, sps);
-    }
-
-    private SimulationSnapshot.ServicePointState snapshotFor(String name, ServicePoint sp, double now) {
-        int cap = sp.getCapacity();
-        int busy = sp.getBusyServerCount();
-        int qlen = sp.getQueueLength();
-        int served = sp.getServedCount();
-        double avgWait = sp.getAverageWaitTime();
-        double avgService = sp.getAverageServiceTime();
-        double util = (now > 0 && cap > 0) ? sp.getBusyTime() / (cap * now) : 0.0;
-
-        int[] perQL = sp.getPerServerQueueLengthsSnapshot();
-        boolean[] busyFlags = sp.getPerServerBusyFlagsSnapshot();
-        double[] perBusy = sp.getPerServerBusyTimeSnapshot();
-        int[] perServed = sp.getPerServerServedSnapshot();
-        double[] perUtil = new double[perBusy.length];
-        double[] perAvgService = new double[perBusy.length];
-        for (int i = 0; i < perBusy.length; i++) {
-            perUtil[i] = now > 0 ? perBusy[i] / now : 0.0;
-            perAvgService[i] = perServed[i] > 0 ? perBusy[i] / perServed[i] : 0.0;
-        }
-
-        return new SimulationSnapshot.ServicePointState(
-                name,
-                busy,
-                cap,
-                qlen,
-                served,
-                avgWait,
-                avgService,
-                util,
-                perQL,
-                busyFlags,
-                perServed,
-                perBusy,
-                perUtil,
-                perAvgService
-        );
-    }
 
     // ---------- Helper methods ----------
 

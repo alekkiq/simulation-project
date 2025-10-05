@@ -1,7 +1,11 @@
 package simu.view;
 
 public interface IVisualisation {
-	public void clearDisplay();
-	public void newCustomer();
+    void clearDisplay();
+    void newCustomer();
+    void updateServicePoints(int numMechanics, int numWashers);
+    void updateQueueLengths(int receptionQueue, int[] mechanicQueues, int[] washerQueues);
+    void moveCustomerToMechanic(int id, int mechanicId);
+    void moveCustomerToWasher(int id, int washerId);
+    void customerExit(int id);
 }
-

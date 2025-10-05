@@ -4,62 +4,78 @@ import javafx.application.Platform;
 import simu.config.SimulationOptions;
 import simu.framework.IEngine;
 import simu.model.EngineMod;
-import simu.model.ISnapshotListener;
 import simu.model.SimParameters;
 import simu.view.ISimulatorUI;
-import simu.view.IVisualisation;
-import simu.framework.Clock;
+import simu.view.Visualisation;
 
 public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 	private EngineMod engine;
 	private ISimulatorUI ui;
     private SimParameters params;
-	
-	public Controller(ISimulatorUI ui, SimParameters params) {
-		this.ui = ui;
+
+    public Controller(ISimulatorUI ui, SimParameters params) {
+        this.ui = ui;
         this.params = params;
-	}
+    }
 
-	/* Engine control: */
-	@Override
-	public void startSimulation() {
-		// reset clock so that multiple runs work correctly
-		Clock.getInstance().setClock(0.0);
+    /* Engine control: */
+    @Override
+    public void startSimulation() {
+        engine = new EngineMod(this, params); // Pass SimParameters to EngineMod
+        engine.setSimulationTime(ui.getTime());
+        engine.setDelay(ui.getDelay());
+        // Update visualization with initial service point configuration
+        updateServicePoints(params.numMechanicsProperty().get(), params.numWashersProperty().get());
+        ui.getVisualisation().clearDisplay();
+        ((Thread) engine).start();
+    }
 
-		SimulationOptions options = params.toConfig();
-		engine = new EngineMod(options, this);
-		IVisualisation vis = ui.getVisualisation();
-		if (vis instanceof ISnapshotListener listener) {
-			engine.setSnapshotListener(listener);
-		}
-		engine.setSimulationTime(ui.getTime());
-		engine.setDelay(ui.getDelay());
-		((Thread) engine).start();
-	}
-	
-	@Override
-	public void decreaseSpeed() { // hidastetaan moottorisäiettä
-		engine.setDelay((long)(engine.getDelay()*1.10));
-	}
+    @Override
+    public void decreaseSpeed() { // hidastetaan moottorisäiettä
+        engine.setDelay((long)(engine.getDelay()*1.10));
+    }
 
-	@Override
-	public void increaseSpeed() { // nopeutetaan moottorisäiettä
-		engine.setDelay((long)(engine.getDelay()*0.9));
-	}
+    @Override
+    public void increaseSpeed() { // nopeutetaan moottorisäiettä
+        engine.setDelay((long)(engine.getDelay()*0.9));
+    }
 
 
-	/* Simulation results passing to the UI
-	 * Because FX-UI updates come from engine thread, they need to be directed to the JavaFX thread
-	 */
-	@Override
-	public void showEndTime(double time) {
-		Platform.runLater(()->ui.setEndingTime(time));
-	}
+    /* Simulation results passing to the UI
+     * Because FX-UI updates come from engine thread, they need to be directed to the JavaFX thread
+     */
+    @Override
+    public void showEndTime(double time) {
+        Platform.runLater(()->ui.setEndingTime(time));
+    }
 
-	@Override
-	public void visualiseCustomer() {
-		IVisualisation vis = ui.getVisualisation();
-		if (vis == null) return;
-		Platform.runLater(vis::newCustomer);
-	}
+    @Override
+    public void visualiseCustomer() {
+        Platform.runLater(() -> ui.getVisualisation().newCustomer());
+    }
+
+    @Override
+    public void visualiseCustomerToMechanic(int id, int mechanicId) {
+        Platform.runLater(() -> ((Visualisation)ui.getVisualisation()).moveCustomerToMechanic(id, mechanicId));
+    }
+
+    @Override
+    public void visualiseCustomerToWasher(int id, int washerId) {
+        Platform.runLater(() -> ((Visualisation)ui.getVisualisation()).moveCustomerToWasher(id, washerId));
+    }
+
+    @Override
+    public void visualiseCustomerExit(int id) {
+        Platform.runLater(() -> ((Visualisation)ui.getVisualisation()).customerExit(id));
+    }
+
+    @Override
+    public void updateServicePoints(int numMechanics, int numWashers) {
+        Platform.runLater(() -> ui.getVisualisation().updateServicePoints(numMechanics, numWashers));
+    }
+
+    @Override
+    public void updateQueueLengths(int receptionQueue, int[] mechanicQueues, int[] washerQueues) {
+        Platform.runLater(() -> ((Visualisation)ui.getVisualisation()).updateQueueLengths(receptionQueue, mechanicQueues, washerQueues));
+    }
 }
