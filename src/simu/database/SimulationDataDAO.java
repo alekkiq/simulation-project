@@ -41,5 +41,17 @@ public class SimulationDataDAO {
             e.printStackTrace();
         }
     }
+    // Tester:
+
+    /*
+    public static void main(String[] args) {
+        SimulationDataDAO dao = new SimulationDataDAO();
+        SimulationData testData = new SimulationData();
+
+        dao.persist(testData);
+        System.out.println("Test data inserted.");
+    } */
 
 }
+
+
