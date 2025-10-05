@@ -205,8 +205,8 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
         // --- Section: Customer Probabilities ---
         form.add(sectionHeader("Customer Probabilities"), 0, r++, 2, 1);
-        form.add(fieldWithValue("P(Needs Mechanic)", probNeedsMechanicSlider, "%.0f%%", 100), 0, r);
-        form.add(fieldWithValue("P(Needs Wash)",     probNeedsWashSlider,     "%.0f%%", 100), 1, r++);
+        form.add(fieldWithValue("Mechanic Probability", probNeedsMechanicSlider, "%.0f%%", 100), 0, r);
+        form.add(fieldWithValue("Wash Probability",     probNeedsWashSlider,     "%.0f%%", 100), 1, r++);
 
         form.add(fieldWithValue("Wash: Exterior", probWashExteriorSlider, "%.0f%%", 100), 0, r);
         form.add(fieldWithValue("Wash: Interior", probWashInteriorSlider, "%.0f%%", 100), 1, r++);

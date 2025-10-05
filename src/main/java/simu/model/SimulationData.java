@@ -24,10 +24,18 @@ public class SimulationData {
     private final double washAvgTotal;
     private final double washUtil;
 
+    // --- Per-server fields (not persisted) ---
     private final int[] mechanicServedPerServer;
     private final double[] mechanicUtilPerServer;  // 0..1
     private final int[] washServedPerServer;
     private final double[] washUtilPerServer;      // 0..1
+
+    private final double[] mechanicAvgWaitPerServer;
+    private final double[] mechanicAvgServicePerServer;
+    private final double[] mechanicAvgTotalPerServer;
+    private final double[] washAvgWaitPerServer;
+    private final double[] washAvgServicePerServer;
+    private final double[] washAvgTotalPerServer;
 
     private SimulationData(
             int receptionServers, int receptionServed,
@@ -37,7 +45,9 @@ public class SimulationData {
             int washServers, int washServed,
             double washAvgWait, double washAvgService, double washAvgTotal, double washUtil,
             int[] mechanicServedPerServer, double[] mechanicUtilPerServer,
-            int[] washServedPerServer, double[] washUtilPerServer
+            int[] washServedPerServer, double[] washUtilPerServer,
+            double[] mechanicAvgWaitPerServer, double[] mechanicAvgServicePerServer, double[] mechanicAvgTotalPerServer,
+            double[] washAvgWaitPerServer, double[] washAvgServicePerServer, double[] washAvgTotalPerServer
     ) {
         this.receptionServers = receptionServers;
         this.receptionServed = receptionServed;
@@ -64,10 +74,16 @@ public class SimulationData {
         this.mechanicUtilPerServer = mechanicUtilPerServer;
         this.washServedPerServer = washServedPerServer;
         this.washUtilPerServer = washUtilPerServer;
+
+        this.mechanicAvgWaitPerServer = mechanicAvgWaitPerServer;
+        this.mechanicAvgServicePerServer = mechanicAvgServicePerServer;
+        this.mechanicAvgTotalPerServer = mechanicAvgTotalPerServer;
+        this.washAvgWaitPerServer = washAvgWaitPerServer;
+        this.washAvgServicePerServer = washAvgServicePerServer;
+        this.washAvgTotalPerServer = washAvgTotalPerServer;
     }
 
     public static SimulationData from(double now, ServicePoint reception, ServicePoint mechanic, ServicePoint wash) {
-        // Reception (single server)
         int rCap = reception.getCapacity();
         int rServed = reception.getServedCount();
         double rAvgWait = reception.getAverageWaitTime();
@@ -75,7 +91,6 @@ public class SimulationData {
         double rAvgTotal = rAvgWait + rAvgService;
         double rUtil = (now > 0 && rCap > 0) ? reception.getBusyTime() / (rCap * now) : 0.0;
 
-        // Mechanic (multi)
         int mCap = mechanic.getCapacity();
         int mServed = mechanic.getServedCount();
         double mAvgWait = mechanic.getAverageWaitTime();
@@ -86,11 +101,12 @@ public class SimulationData {
         int[] mServedPer = mechanic.getPerServerServedSnapshot();
         double[] mBusyPer = mechanic.getPerServerBusyTimeSnapshot();
         double[] mUtilPer = new double[mBusyPer.length];
-        for (int i = 0; i < mBusyPer.length; i++) {
-            mUtilPer[i] = now > 0 ? mBusyPer[i] / now : 0.0;
-        }
+        for (int i = 0; i < mBusyPer.length; i++) mUtilPer[i] = now > 0 ? mBusyPer[i] / now : 0.0;
 
-        // Wash (multi)
+        double[] mAvgWaitPer = mechanic.getPerServerAverageWaitTimes();
+        double[] mAvgServicePer = mechanic.getPerServerAverageServiceTimes();
+        double[] mAvgTotalPer = mechanic.getPerServerAverageTotalTimes();
+
         int wCap = wash.getCapacity();
         int wServed = wash.getServedCount();
         double wAvgWait = wash.getAverageWaitTime();
@@ -101,16 +117,20 @@ public class SimulationData {
         int[] wServedPer = wash.getPerServerServedSnapshot();
         double[] wBusyPer = wash.getPerServerBusyTimeSnapshot();
         double[] wUtilPer = new double[wBusyPer.length];
-        for (int i = 0; i < wBusyPer.length; i++) {
-            wUtilPer[i] = now > 0 ? wBusyPer[i] / now : 0.0;
-        }
+        for (int i = 0; i < wBusyPer.length; i++) wUtilPer[i] = now > 0 ? wBusyPer[i] / now : 0.0;
+
+        double[] wAvgWaitPer = wash.getPerServerAverageWaitTimes();
+        double[] wAvgServicePer = wash.getPerServerAverageServiceTimes();
+        double[] wAvgTotalPer = wash.getPerServerAverageTotalTimes();
 
         return new SimulationData(
                 rCap, rServed, rAvgWait, rAvgService, rAvgTotal, rUtil,
                 mCap, mServed, mAvgWait, mAvgService, mAvgTotal, mUtil,
                 wCap, wServed, wAvgWait, wAvgService, wAvgTotal, wUtil,
                 mServedPer, mUtilPer,
-                wServedPer, wUtilPer
+                wServedPer, wUtilPer,
+                mAvgWaitPer, mAvgServicePer, mAvgTotalPer,
+                wAvgWaitPer, wAvgServicePer, wAvgTotalPer
         );
     }
 
@@ -140,4 +160,11 @@ public class SimulationData {
     public double[] getMechanicUtilPerServer() { return mechanicUtilPerServer.clone(); }
     public int[] getWashServedPerServer() { return washServedPerServer.clone(); }
     public double[] getWashUtilPerServer() { return washUtilPerServer.clone(); }
+
+    public double[] getMechanicAvgWaitPerServer() { return mechanicAvgWaitPerServer.clone(); }
+    public double[] getMechanicAvgServicePerServer() { return mechanicAvgServicePerServer.clone(); }
+    public double[] getMechanicAvgTotalPerServer() { return mechanicAvgTotalPerServer.clone(); }
+    public double[] getWashAvgWaitPerServer() { return washAvgWaitPerServer.clone(); }
+    public double[] getWashAvgServicePerServer() { return washAvgServicePerServer.clone(); }
+    public double[] getWashAvgTotalPerServer() { return washAvgTotalPerServer.clone(); }
 }

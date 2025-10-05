@@ -117,6 +117,7 @@ public class ServicePoint {
 	private double totalBusyTime = 0.0;
 	private final double[] perServerBusy;
 	private final int[] perServerServed;
+	private final double[] perServerWaitSum;
 
 
 	// ---------- Constructors ----------
@@ -156,6 +157,7 @@ public class ServicePoint {
 
 		this.perServerBusy = new double[this.capacity];
 		this.perServerServed = new int[this.capacity];
+		this.perServerWaitSum = new double[this.capacity];
 	}
 
 	public ServicePoint(ContinuousGenerator[] gens, EventList el, EventType type) {
@@ -184,6 +186,7 @@ public class ServicePoint {
 
 		this.perServerBusy = new double[this.capacity];
 		this.perServerServed = new int[this.capacity];
+		this.perServerWaitSum = new double[this.capacity];
 	}
 
 
@@ -230,6 +233,7 @@ public class ServicePoint {
 
 				double wait = Math.max(0.0, now - qi.enqueuedAt);
 				this.totalWaitTime += wait;
+				this.perServerWaitSum[sid] += wait;
 
 				double baseSample = this.generators[sid] != null ? this.generators[sid].sample() : 0.0;
 				double serviceTime = (timeStrategy != null) ? timeStrategy.adjust(c, sid, baseSample) : baseSample;
@@ -382,6 +386,44 @@ public class ServicePoint {
         }
         return lengths;
     }
+
+	/**
+	 * Get per-server average wait times
+	 * @return array of length `capacity` with per-server average wait times
+	 */
+	public double[] getPerServerAverageWaitTimes() {
+		double[] avg = new double[this.capacity];
+		for (int i = 0; i < this.capacity; i++) {
+			avg[i] = perServerServed[i] > 0 ? perServerWaitSum[i] / perServerServed[i] : 0.0;
+		}
+		return avg;
+	}
+
+	/**
+	 * Get per-server average service times
+	 * @return array of length `capacity` with per-server average service times
+	 */
+	public double[] getPerServerAverageServiceTimes() {
+		double[] avg = new double[this.capacity];
+		for (int i = 0; i < this.capacity; i++) {
+			avg[i] = perServerServed[i] > 0 ? perServerBusy[i] / perServerServed[i] : 0.0;
+		}
+		return avg;
+	}
+
+	/**
+	 * Get per-server average total times (wait + service)
+	 * @return array of length `capacity` with per-server average total times
+	 */
+	public double[] getPerServerAverageTotalTimes() {
+		double[] wait = getPerServerAverageWaitTimes();
+		double[] svc = getPerServerAverageServiceTimes();
+		double[] tot = new double[this.capacity];
+		for (int i = 0; i < this.capacity; i++) {
+			tot[i] = wait[i] + svc[i];
+		}
+		return tot;
+	}
 
     /**
      * Get total number of customers at this service point

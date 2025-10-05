@@ -58,7 +58,7 @@ public class ResultsView {
         TableView<Row> table = new TableView<>();
         table.getStyleClass().add("results-table");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.setPlaceholder(new Label("")); // no 'No content...' label
+        table.setPlaceholder(new Label(""));
 
         TableColumn<Row,String> cName = new TableColumn<>("Point");
         cName.setCellValueFactory(new PropertyValueFactory<>("name"));
@@ -89,7 +89,6 @@ public class ResultsView {
 
         table.getColumns().addAll(cName,cServ,cSrv,cWait,cSvc,cTot,cUtil);
 
-        // Aggregated rows (flag aggregate=true)
         table.getItems().add(new Row("Reception", data.getReceptionServed(), data.getReceptionServers(),
                 data.getReceptionAvgWait(), data.getReceptionAvgService(), data.getReceptionAvgTotal(), data.getReceptionUtil(), true));
 
@@ -99,27 +98,30 @@ public class ResultsView {
         table.getItems().add(new Row("Wash (all)", data.getWashServed(), data.getWashServers(),
                 data.getWashAvgWait(), data.getWashAvgService(), data.getWashAvgTotal(), data.getWashUtil(), true));
 
-        // Per-server mechanic rows
         int[] mServed = data.getMechanicServedPerServer();
         double[] mUtil = data.getMechanicUtilPerServer();
+        double[] mAvgW = data.getMechanicAvgWaitPerServer();
+        double[] mAvgS = data.getMechanicAvgServicePerServer();
+        double[] mAvgT = data.getMechanicAvgTotalPerServer();
         for (int i = 0; i < mServed.length; i++) {
             table.getItems().add(new Row("Mechanic #" + (i + 1),
                     mServed[i], 1,
-                    data.getMechanicAvgWait(), data.getMechanicAvgService(), data.getMechanicAvgTotal(),
+                    mAvgW[i], mAvgS[i], mAvgT[i],
                     mUtil[i], false));
         }
 
-        // Per-server wash rows
         int[] wServed = data.getWashServedPerServer();
         double[] wUtil = data.getWashUtilPerServer();
+        double[] wAvgW = data.getWashAvgWaitPerServer();
+        double[] wAvgS = data.getWashAvgServicePerServer();
+        double[] wAvgT = data.getWashAvgTotalPerServer();
         for (int i = 0; i < wServed.length; i++) {
             table.getItems().add(new Row("Wash #" + (i + 1),
                     wServed[i], 1,
-                    data.getWashAvgWait(), data.getWashAvgService(), data.getWashAvgTotal(),
+                    wAvgW[i], wAvgS[i], wAvgT[i],
                     wUtil[i], false));
         }
 
-        // Row styling (bold aggregate)
         table.setRowFactory(tv -> new TableRow<>() {
             @Override
             protected void updateItem(Row item, boolean empty) {
@@ -134,12 +136,11 @@ public class ResultsView {
             }
         });
 
-        // Remove extra blank visual rows: fix cell size & bind height to item count
         double cellH = 28;
         table.setFixedCellSize(cellH);
         table.prefHeightProperty().bind(
                 Bindings.size(table.getItems()).multiply(table.getFixedCellSize())
-                        .add(table.getFixedCellSize() + 6) // header + padding
+                        .add(table.getFixedCellSize() + 6)
         );
         table.minHeightProperty().bind(table.prefHeightProperty());
         table.maxHeightProperty().bind(table.prefHeightProperty());
