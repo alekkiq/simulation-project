@@ -29,7 +29,7 @@ public class MariaDBConnection {
         try {
             getConnection().close();
         } catch (SQLException e) {
-            // TODO Auto-generated catch block
+            System.out.println("Termination failed.");
             e.printStackTrace();
         }
     }
