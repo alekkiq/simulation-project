@@ -1,6 +1,7 @@
 package simu.controller;
 
 import javafx.application.Platform;
+import simu.config.SimulationOptions;
 import simu.framework.IEngine;
 import simu.model.EngineMod;
 import simu.model.ISnapshotListener;
@@ -10,7 +11,7 @@ import simu.view.IVisualisation;
 import simu.framework.Clock;
 
 public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
-	private IEngine engine;
+	private EngineMod engine;
 	private ISimulatorUI ui;
     private SimParameters params;
 	
@@ -25,13 +26,11 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
 		// reset clock so that multiple runs work correctly
 		Clock.getInstance().setClock(0.0);
 
-		var options = params.toConfig();
+		SimulationOptions options = params.toConfig();
 		engine = new EngineMod(options, this);
-		if (engine instanceof EngineMod em) {
-			var vis = ui.getVisualisation();
-			if (vis instanceof ISnapshotListener listener) {
-				em.setSnapshotListener(listener);
-			}
+		IVisualisation vis = ui.getVisualisation();
+		if (vis instanceof ISnapshotListener listener) {
+			engine.setSnapshotListener(listener);
 		}
 		engine.setSimulationTime(ui.getTime());
 		engine.setDelay(ui.getDelay());

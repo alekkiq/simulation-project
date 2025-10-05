@@ -234,13 +234,13 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 // --- Start button ---
         Button startButton = new Button("Start Simulation");
         startButton.setPrefWidth(220);
+        startButton.getStyleClass().add("primary");
 
+        // start event
         startButton.setOnAction(e -> {
             // System.out.println(params);
             this.showAndStart();
         });
-        startButton.getStyleClass().add("primary");
-        startButton.setOnAction(e -> System.out.println(params));
 
         HBox startRow = new HBox(startButton);
         startRow.setAlignment(Pos.CENTER);
