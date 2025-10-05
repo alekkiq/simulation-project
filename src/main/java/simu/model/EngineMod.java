@@ -165,7 +165,7 @@ public class EngineMod extends Engine {
                 this.reception.addQueue(c);
 
                 if (this.controller != null) {
-                    this.controller.visualiseCustomer();
+                    this.controller.visualiseCustomer(c.getId());
                 }
 
                 this.arrivals.generateNextEvent();

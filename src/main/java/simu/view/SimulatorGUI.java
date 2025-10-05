@@ -57,6 +57,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
     // --- Visualization ---
     private Visualisation visualisation;
     private Stage primaryStage;
+    private Stage visualizationStage;
 
     // -------- helpers --------
     private static Slider makeProbSlider(double def) {
@@ -228,9 +229,18 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         Button startButton = new Button("Start Simulation");
         startButton.setPrefWidth(220);
         startButton.getStyleClass().add("primary");
+
+        // start button event handler
         startButton.setOnAction(e -> {
-            Stage visualStage = new Stage();
-            visualStage.setTitle("Simulation Visualization");
+            visualisation.reset(); // reset the visualisation before starting
+
+            if (visualizationStage != null) {
+                visualizationStage.close();
+                visualizationStage = null;
+            }
+
+            visualizationStage = new Stage();
+            visualizationStage.setTitle("Simulation Visualization");
 
             VBox visualRoot = new VBox(20);  // 20px spacing between elements
             visualRoot.setAlignment(Pos.CENTER);
@@ -242,8 +252,8 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
             Scene visualScene = new Scene(visualRoot, 1200, 900);
             visualScene.getStylesheets().add("styles.css");
-            visualStage.setScene(visualScene);
-            visualStage.show();
+            visualizationStage.setScene(visualScene);
+            visualizationStage.show();
 
             // Start the simulation
             controller.startSimulation();
@@ -265,14 +275,13 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         VBox root = new VBox(12, heading, scroll);
         root.setAlignment(Pos.TOP_CENTER);
         root.setPadding(new Insets(20));
-        root.getStyleClass().add("root-container");             // style: root container
+        root.getStyleClass().add("root-container");
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
         Scene scene = new Scene(root, 900, 900);
         // style: load stylesheet
         primaryStage = stage; // save for owner reference for modals
         scene.getStylesheets().add("styles.css");
-
         stage.setTitle("Car Kosovo Simulator");
         stage.setScene(scene);
         stage.show();
@@ -414,6 +423,11 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
     @Override
     public void onSimulationFinished(double endTime, SimulationData data) {
+        if (visualizationStage != null) {
+            visualizationStage.close();
+            visualizationStage = null;
+        }
+
         if (primaryStage != null) {
             primaryStage.hide();
         }

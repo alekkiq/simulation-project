@@ -64,18 +64,9 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
         t.start();
     }
 
-
-    /* Simulation results passing to the UI
-     * Because FX-UI updates come from engine thread, they need to be directed to the JavaFX thread
-     */
     @Override
-    public void showEndTime(double time) {
-        Platform.runLater(()->ui.setEndingTime(time));
-    }
-
-    @Override
-    public void visualiseCustomer() {
-        Platform.runLater(() -> ui.getVisualisation().newCustomer());
+    public void visualiseCustomer(int id) {
+        Platform.runLater(() -> ui.getVisualisation().newCustomer(id));
     }
 
     @Override

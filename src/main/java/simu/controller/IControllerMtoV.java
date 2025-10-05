@@ -4,8 +4,7 @@ import simu.model.SimulationData;
 
 /* interface for the engine */
 public interface IControllerMtoV {
-    public void showEndTime(double time);
-    public void visualiseCustomer();
+    public void visualiseCustomer(int id);
     public void visualiseCustomerToMechanic(int id, int mechanicId);
     public void visualiseCustomerToWasher(int id, int washerId);
     public void visualiseCustomerExit(int id);

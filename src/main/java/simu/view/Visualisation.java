@@ -64,6 +64,15 @@ public class Visualisation extends Canvas implements IVisualisation {
         clearDisplay();
     }
 
+    public void reset() {
+        customers.clear();
+        receptionQueue.clear();
+        mechanicQueues.values().forEach(List::clear);
+        washerQueues.values().forEach(List::clear);
+        finalStatsText = null;
+        clearDisplay();
+    }
+
     private void setupCanvas() {
         gc.setLineCap(StrokeLineCap.ROUND);
         gc.setLineJoin(StrokeLineJoin.ROUND);
@@ -71,9 +80,9 @@ public class Visualisation extends Canvas implements IVisualisation {
     }
 
     @Override
-    public void newCustomer() {
-        Customer customer = new Customer(nextCustomerId++, receptionX, receptionY);
-        customers.put(customer.getId(), customer);
+    public void newCustomer(int id) {
+        Customer customer = new Customer(id, receptionX, receptionY);
+        customers.put(id, customer);
         receptionQueue.add(customer);
         clearAndRedraw();
     }
@@ -255,11 +264,6 @@ public class Visualisation extends Canvas implements IVisualisation {
         }
 
         clearDisplay();
-    }
-
-    public void showFinalStatistics(String stats) {
-        this.finalStatsText = stats;
-        clearAndRedraw();
     }
 
     private void drawFinalStatistics() {
