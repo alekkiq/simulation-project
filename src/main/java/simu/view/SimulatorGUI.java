@@ -242,13 +242,19 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
             visualizationStage = new Stage();
             visualizationStage.setTitle("Simulation Visualization");
 
-            VBox visualRoot = new VBox(20);  // 20px spacing between elements
-            visualRoot.setAlignment(Pos.CENTER);
-            visualRoot.setPadding(new Insets(20));
+            VBox visualRoot = new VBox(12);  // reduced spacing
+            visualRoot.setAlignment(Pos.TOP_CENTER);
+            visualRoot.setPadding(new Insets(12));
             visualRoot.setStyle("-fx-background-color: #2B2B2B;");
 
-            // Add visualization
-            visualRoot.getChildren().addAll(visualisation);
+            // toolbar for controlling the simulation
+            VisualisationToolbar toolbar = new VisualisationToolbar(controller);
+            toolbar.setMaxWidth(Double.MAX_VALUE);
+
+            VBox.setVgrow(visualisation, Priority.ALWAYS);
+
+            // add toolbar first, then canvas
+            visualRoot.getChildren().addAll(toolbar, visualisation);
 
             Scene visualScene = new Scene(visualRoot, 1200, 900);
             visualScene.getStylesheets().add("styles.css");

@@ -34,6 +34,10 @@ public class EngineMod extends Engine {
     // controller
     private IControllerMtoV controller;
 
+    // status flags
+    private volatile boolean paused = false;
+    private volatile boolean stopRequested = false;
+
     /**
      * Custom generator that modifies the speed of a base generator by a given factor.
      * For example, a speed factor of 2.0 makes the service twice as fast (halves the time).
@@ -343,6 +347,38 @@ public class EngineMod extends Engine {
                 case MECHANIC_END:  si.customer.tMechanicStart = now;   break;
                 case WASH_END:      si.customer.tWashStart = now;       break;
                 default: break;
+            }
+        }
+    }
+
+
+    // ---------- Control methods -----------
+    public void pause() {
+        this.paused = true;
+    }
+
+    public void resumeEngine() {
+        this.paused = false;
+        synchronized (this) {
+            this.notifyAll();
+        }
+    }
+
+    public void requestStop() {
+        this.stopRequested = true;
+        this.resumeEngine(); // in case it's paused
+    }
+
+    @Override
+    protected void beforeCycle() {
+        if (this.stopRequested) {
+            setSimulationTime(Clock.getInstance().getClock());
+        }
+        if (this.paused) {
+            synchronized (this) {
+                while (this.paused && !this.stopRequested) {
+                    try { wait(200); } catch (InterruptedException ignored) {}
+                }
             }
         }
     }

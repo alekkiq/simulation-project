@@ -49,6 +49,21 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
     }
 
     @Override
+    public void stopSimulation() {
+        if (engine != null) engine.requestStop();
+    }
+
+    @Override
+    public void pauseSimulation() {
+        if (engine != null) engine.pause();
+    }
+
+    @Override
+    public void resumeSimulation() {
+        if (engine != null) engine.resumeEngine();
+    }
+
+    @Override
     public void simulationFinished(double endTime, SimulationData data) {
         Platform.runLater(() -> ui.onSimulationFinished(endTime, data));
 

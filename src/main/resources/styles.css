@@ -203,3 +203,22 @@
 .combo-box-base {
     -fx-text-fill: white;
 }
+
+/* Visualisation toolbar */
+.sim-toolbar {
+    -fx-background-color: #3a3f44;
+    -fx-border-color: #555;
+    -fx-border-width: 0 0 1 0;
+}
+.sim-toolbar .label {
+    -fx-font-weight: 600;
+    -fx-font-size: 16px;
+}
+.sim-toolbar .button {
+    -fx-font-weight: bold;
+    -fx-font-size: 16px;
+}
+
+.sim-toolbar .value-chip {
+    -fx-font-weight: 500;
+}

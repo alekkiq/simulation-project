@@ -46,6 +46,7 @@ public abstract class Engine extends Thread implements IEngine {
 		initialize(); // creating, e.g., the first event
 
 		while (simulate()){
+			beforeCycle();
 			delay(); // NEW
 			clock.setClock(currentTime());
 			runBEvents();
@@ -113,4 +114,11 @@ public abstract class Engine extends Thread implements IEngine {
 	 * Defined in simu.model-package's class who is inheriting the Engine class
 	 */
 	protected abstract void results();
+
+	/**
+	 * This method is called at the beginning of each simulation cycle
+	 * Can be used e.g., for updating a visualisation
+	 * Defined in simu.model-package's class who is inheriting the Engine class
+	 */
+	protected abstract void beforeCycle();
 }
