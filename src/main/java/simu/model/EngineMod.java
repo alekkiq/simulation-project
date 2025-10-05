@@ -72,6 +72,33 @@ public class EngineMod extends Engine {
         this.arrivals  = buildArrivals(options);
     }
 
+    public EngineMod(IControllerMtoV controller, SimParameters params) {
+        // Start with default options to ensure all distributions are initialized
+        this.options = SimulationOptions.defaults();
+        this.controller = controller;
+
+        // Update options from params while keeping the default distributions
+        options.setMechanicServers(params.numMechanicsProperty().get());
+        options.setWashServers(params.numWashersProperty().get());
+        options.setProbNeedsMechanic(params.pNeedsMechanicProperty().get());
+        options.setProbNeedsWash(params.pNeedsWashProperty().get());
+        options.setWashProbExterior(params.pWashExteriorProperty().get());
+        options.setWashProbInterior(params.pWashInteriorProperty().get());
+        options.setWashProbBoth(params.pWashBothProperty().get());
+
+        // Initialize services
+        this.rng = new Random(options.getBaseRandomSeed());
+        this.reception = buildReception(options);
+        this.mechanic = buildMechanic(options);
+        this.wash = buildWash(options);
+        this.arrivals = buildArrivals(options);
+
+        // Update visualization with initial configuration
+        if (controller != null) {
+            controller.updateServicePoints(options.getMechanicServers(), options.getWashServers());
+        }
+    }
+
 
     // ---------- Initialization ----------
 
@@ -197,50 +224,69 @@ public class EngineMod extends Engine {
 
         while (true) {
             ServicePoint.EndInfo ei = sp.finishService(now);
-
             if (ei == null) break;
 
-            finished++;
             Customer c = ei.customer;
 
             switch (type) {
                 case RECEPTION_END:
-                    c.tReceptionEnd = now;
                     if (c.needsMechanic()) {
                         c.tMechanicQIn = now;
-                        this.mechanic.addQueue(c);
+                        mechanic.addQueue(c);
+                        if (controller != null) {
+                            controller.visualiseCustomerToMechanic(c.getId(), mechanic.getAssignedServer(c));
+                        }
                     } else if (c.needsWash()) {
                         c.tWashQIn = now;
-                        this.wash.addQueue(c);
+                        wash.addQueue(c);
+                        if (controller != null) {
+                            controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
+                        }
                     } else {
-                        this.depart(c, now);
+                        c.tDeparture = now;
+                        if (controller != null) {
+                            controller.visualiseCustomerExit(c.getId());
+                        }
                     }
                     break;
 
                 case MECHANIC_END:
-                    c.tMechanicEnd = now;
-                    if (c.needsWash() && c.tWashEnd <= 0) {
+                    if (c.needsWash()) {
                         c.tWashQIn = now;
-                        this.wash.addQueue(c);
+                        wash.addQueue(c);
+                        if (controller != null) {
+                            controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
+                        }
                     } else {
-                        this.depart(c, now);
+                        c.tDeparture = now;
+                        if (controller != null) {
+                            controller.visualiseCustomerExit(c.getId());
+                        }
                     }
                     break;
 
                 case WASH_END:
-                    c.tWashEnd = now;
-                    this.depart(c, now);
+                    c.tDeparture = now;
+                    if (controller != null) {
+                        controller.visualiseCustomerExit(c.getId());
+                    }
                     break;
 
-                default: break;
+                default:
+                    break;
             }
+            finished++;
         }
-        if (finished == 0) {
-            double tnext = sp.nextEndTime();
-            if (Double.isFinite(tnext)) {
-                tnext = safeFutureTime(tnext, now);
-                this.eventList.add(new Event(type, tnext));
-            }
+
+        // Generate next service events for any customers that started service
+        sp.tryStart(now);
+
+        // Update queue lengths in visualization
+        if (controller != null) {
+            int receptionQueueLength = reception.getQueueLength();
+            int[] mechanicQueues = mechanic.getQueueLengthsPerServer();
+            int[] washerQueues = wash.getQueueLengthsPerServer();
+            controller.updateQueueLengths(receptionQueueLength, mechanicQueues, washerQueues);
         }
     }
 
@@ -254,6 +300,14 @@ public class EngineMod extends Engine {
         // possible multiserver service points
         this.startIfPossible(this.mechanic,  EventType.MECHANIC_END,  now);
         this.startIfPossible(this.wash,      EventType.WASH_END,      now);
+
+        // Update queue lengths in visualization
+        if (controller != null) {
+            int receptionQueueLength = reception.getQueueLength();
+            int[] mechanicQueues = mechanic.getQueueLengthsPerServer();
+            int[] washerQueues = wash.getQueueLengthsPerServer();
+            controller.updateQueueLengths(receptionQueueLength, mechanicQueues, washerQueues);
+        }
     }
 
     /**

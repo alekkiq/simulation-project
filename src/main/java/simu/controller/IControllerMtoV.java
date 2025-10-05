@@ -2,6 +2,11 @@ package simu.controller;
 
 /* interface for the engine */
 public interface IControllerMtoV {
-		public void showEndTime(double time);
-		public void visualiseCustomer();
+    public void showEndTime(double time);
+    public void visualiseCustomer();
+    public void visualiseCustomerToMechanic(int id, int mechanicId);
+    public void visualiseCustomerToWasher(int id, int washerId);
+    public void visualiseCustomerExit(int id);
+    public void updateServicePoints(int numMechanics, int numWashers);
+    public void updateQueueLengths(int receptionQueue, int[] mechanicQueues, int[] washerQueues);
 }

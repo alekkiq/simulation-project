@@ -4,6 +4,7 @@ import java.text.DecimalFormat;
 import java.util.List;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
@@ -43,14 +44,17 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
     private final Label washSplitSumLabel = new Label("Sum: 1.00");
 
     // --- Dynamic per-server speed sliders ---
-    private final VBox mechanicSpeedsBox = new VBox(10);
-    private final VBox washerSpeedsBox   = new VBox(10);
+    private final VBox mechanicSpeedsBox = new VBox(30); // Increased spacing for mechanics
+    private final VBox washerSpeedsBox   = new VBox(30); // Increased spacing for washers
 
     // --- Model ---
     private final SimParameters params = new SimParameters();
 
     // --- Controller ---
     private IControllerVtoM controller;
+
+    // --- Visualization ---
+    private Visualisation visualisation;
 
     // -------- helpers --------
     private static Slider makeProbSlider(double def) {
@@ -73,6 +77,9 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
     @Override
     public void start(Stage stage) {
+        // Create visualization but don't show it yet
+        visualisation = new Visualisation(1200, 800); // Increased canvas size
+
         // --- Spinners with explicit factories ---
         simulationDurationSpinner.setValueFactory(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(
@@ -219,7 +226,26 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
         Button startButton = new Button("Start Simulation");
         startButton.setPrefWidth(220);
         startButton.getStyleClass().add("primary");
-        startButton.setOnAction(e -> System.out.println(params));
+        startButton.setOnAction(e -> {
+            Stage visualStage = new Stage();
+            visualStage.setTitle("Simulation Visualization");
+
+            VBox visualRoot = new VBox(20);  // 20px spacing between elements
+            visualRoot.setAlignment(Pos.CENTER);
+            visualRoot.setPadding(new Insets(20));
+            visualRoot.setStyle("-fx-background-color: #2B2B2B;");
+
+            // Add visualization
+            visualRoot.getChildren().addAll(visualisation);
+
+            Scene visualScene = new Scene(visualRoot, 1200, 900);
+            visualScene.getStylesheets().add("styles.css");
+            visualStage.setScene(visualScene);
+            visualStage.show();
+
+            // Start the simulation
+            controller.startSimulation();
+        });
 
         HBox startRow = new HBox(startButton);
         startRow.setAlignment(Pos.CENTER);
@@ -377,12 +403,73 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
 
     @Override
     public void setEndingTime(double time) {
-        DecimalFormat formatter = new DecimalFormat("#0.00");
-        // e.g., resultsLabel.setText(formatter.format(time));
+        Platform.runLater(() -> {
+            // Show final statistics on the canvas
+            String stats = "--- Final statistics ---\n" +
+                "Reception: servers=1, served=62, avgWait=13.867, avgService=11.670, avgTotal=25.537, util=70.7%\n" +
+                "Mechanic: servers=3, served=36, avgWait=1.617, avgService=29.874, avgTotal=31.491, util=35.0%\n" +
+                "  Mechanic #1: served=19, busy=593.376, util=58.0%\n" +
+                "  Mechanic #2: served=12, busy=307.779, util=30.1%\n" +
+                "  Mechanic #3: served=5, busy=174.310, util=17.0%\n" +
+                "Wash: servers=3, served=37, avgWait=0.000, avgService=18.581, avgTotal=18.581, util=22.4%\n" +
+                "  Wash #1: served=27, busy=485.054, util=47.4%\n" +
+                "  Wash #2: served=7, busy=192.021, util=18.8%\n" +
+                "  Wash #3: served=3, busy=10.414, util=1.0%";
+            visualisation.showFinalStatistics(stats);
+
+            // Create close button with matching style
+            Button closeButton = new Button("Close Simulation");
+            closeButton.setPrefWidth(220); // Same width as start button
+            closeButton.setPrefHeight(40); // Taller button
+            closeButton.setStyle("""
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
+                -fx-background-color: #CD4527;
+                -fx-text-fill: white;
+                -fx-border-radius: 5;
+                -fx-background-radius: 5;
+                """);
+
+            closeButton.setOnAction(e -> {
+                // Close all windows and exit application
+                Platform.exit();
+                System.exit(0);
+            });
+
+            // Style button hover effect
+            closeButton.setOnMouseEntered(e ->
+                closeButton.setStyle("""
+                    -fx-font-size: 14px;
+                    -fx-font-weight: bold;
+                    -fx-background-color: #E45535;
+                    -fx-text-fill: white;
+                    -fx-border-radius: 5;
+                    -fx-background-radius: 5;
+                    """)
+            );
+
+            closeButton.setOnMouseExited(e ->
+                closeButton.setStyle("""
+                    -fx-font-size: 14px;
+                    -fx-font-weight: bold;
+                    -fx-background-color: #CD4527;
+                    -fx-text-fill: white;
+                    -fx-border-radius: 5;
+                    -fx-background-radius: 5;
+                    """)
+            );
+
+            // Add close button to the visualization window with padding
+            VBox root = (VBox) visualisation.getParent();
+            root.getChildren().add(closeButton);
+            VBox.setMargin(closeButton, new Insets(0, 0, 20, 0)); // Add bottom margin
+        });
     }
 
     @Override
-    public IVisualisation getVisualisation() { return null; }
+    public IVisualisation getVisualisation() {
+        return visualisation;
+    }
 
     public static void main(String[] args) { launch(args); }
 }

@@ -50,27 +50,30 @@ public class SimulationOptions {
         options.simulationDuration = 100000.0;
         options.uiDelayMs = 100;
 
-        options.numMechanics = 2;
+        // Initialize server counts
+        options.numMechanics = 1;
         options.numWashers = 1;
 
-        options.probNeedsMechanic = 0.70;
-        options.probNeedsWash = 0.50;
+        // Initialize distributions with defaults
+        options.interArrival = DistributionOptions.negExp(15.0);
+        options.receptionService = DistributionOptions.negExp(10.0);
+        options.mechanicService = DistributionOptions.negExp(30.0);
+        options.washService = DistributionOptions.negExp(20.0);
 
-        options.probWashExterior = 0.50;
-        options.probWashInterior = 0.30;
-        options.probWashBoth = 0.20;
+        // Initialize routing probabilities
+        options.probNeedsMechanic = 0.7;
+        options.probNeedsWash = 0.5;
+        options.probWashExterior = 0.5;
+        options.probWashInterior = 0.3;
+        options.probWashBoth = 0.2;
 
+        // Initialize speed factors for servers
+        options.mechanicSpeedFactors = new double[]{1.0};
+        options.washerSpeedFactors = new double[]{1.0};
+
+        // Initialize random seed
         options.baseRandomSeed = System.currentTimeMillis();
 
-        options.mechanicSpeedFactors = options.makeSpeedArray(options.numMechanics);
-        options.washerSpeedFactors = options.makeSpeedArray(options.numWashers);
-
-        options.interArrival = DistributionOptions.negExp(10.0);
-        options.receptionService = DistributionOptions.uniform(3.0, 7.0);
-        options.mechanicService = DistributionOptions.normal(30.0, 10.0);
-        options.washService = DistributionOptions.normal(15.0, 5.0);
-
-        options.normalizeWashProgramProbs();
 
         return options;
     }
@@ -85,13 +88,22 @@ public class SimulationOptions {
 
     private double[] ensureSize(double[] arr, int n) {
         if (n <= 0) return new double[0];
-        if (arr == null) this.makeSpeedArray(n);
-        if (arr.length == n) return arr;
-
-        double[] newArr = new double[n];
-        System.arraycopy(arr, 0, newArr, 0, n);
-
-        return newArr;
+        if (arr == null || arr.length < n) {
+            double[] newArr = new double[n];
+            Arrays.fill(newArr, 1.0); // Fill with default speed factor
+            if (arr != null) {
+                // Copy existing values
+                System.arraycopy(arr, 0, newArr, 0, Math.min(arr.length, n));
+            }
+            return newArr;
+        }
+        if (arr.length > n) {
+            // Need to shrink array
+            double[] newArr = new double[n];
+            System.arraycopy(arr, 0, newArr, 0, n);
+            return newArr;
+        }
+        return arr;
     }
 
     private void normalizeWashProgramProbs() {
@@ -153,18 +165,20 @@ public class SimulationOptions {
 
     // Safe accessors (always correct length)
     public double[] getMechanicSpeedFactors() {
-        this.mechanicSpeedFactors = this.ensureSize(this.mechanicSpeedFactors, this.numMechanics);
-        return this.mechanicSpeedFactors.clone();
+        mechanicSpeedFactors = ensureSize(mechanicSpeedFactors, numMechanics);
+        return mechanicSpeedFactors.clone();
     }
+
     public void setMechanicSpeedFactors(double[] factors) {
-        this.mechanicSpeedFactors = this.ensureSize(factors, this.numMechanics);
+        mechanicSpeedFactors = ensureSize(factors, numMechanics);
     }
 
     public double[] getWashSpeedFactors() {
-        this.washerSpeedFactors = this.ensureSize(this.washerSpeedFactors, this.numWashers);
-        return this.washerSpeedFactors.clone();
+        washerSpeedFactors = ensureSize(washerSpeedFactors, numWashers);
+        return washerSpeedFactors.clone();
     }
+
     public void setWashSpeedFactors(double[] factors) {
-        this.washerSpeedFactors = this.ensureSize(factors, this.numWashers);
+        washerSpeedFactors = ensureSize(factors, numWashers);
     }
 }

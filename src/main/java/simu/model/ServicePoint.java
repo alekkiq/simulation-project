@@ -2,8 +2,6 @@ package simu.model;
 
 import distributions.ContinuousGenerator;
 import simu.framework.*;
-
-// import java.time.Clock;
 import java.util.LinkedList;
 
 /**
@@ -182,12 +180,25 @@ public class ServicePoint {
 	}
 
 	private int selectShortestQueueServer() {
+		// Find server with shortest total time (queue length * average service time + current service remaining time)
 		int best = 0;
-		int bestSize = this.queues[0].size();
-		for (int i = 1; i < this.capacity; i++) {
-			int size = this.queues[i].size();
-			if (size < bestSize) {
-				bestSize = size;
+		double bestTotalTime = Double.POSITIVE_INFINITY;
+		double now = Clock.getInstance().getClock();
+
+		for (int i = 0; i < this.capacity; i++) {
+			// Calculate estimated total processing time for this server
+			double queueTime = this.queues[i].size() * this.getAverageServiceTime();
+
+			// Add remaining service time if server is busy
+			double remainingTime = 0;
+			if (this.active[i] != null) {
+				remainingTime = Math.max(0, this.endTimes[i] - now);
+			}
+
+			double totalTime = queueTime + remainingTime;
+
+			if (totalTime < bestTotalTime) {
+				bestTotalTime = totalTime;
 				best = i;
 			}
 		}
@@ -308,4 +319,51 @@ public class ServicePoint {
 		System.arraycopy(this.perServerServed, 0, copy, 0, copy.length);
 		return copy;
 	}
+
+    /**
+     * Get the server ID that is currently serving or will serve this customer
+     */
+    public int getAssignedServer(Customer customer) {
+        // Check active servers first
+        for (int i = 0; i < capacity; i++) {
+            if (active[i] == customer) {
+                return i;
+            }
+        }
+
+        // Check queues
+        for (int i = 0; i < capacity; i++) {
+            for (QItem item : queues[i]) {
+                if (item.customer == customer) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Get number of customers in each server's queue
+     */
+    public int[] getQueueLengthsPerServer() {
+        int[] lengths = new int[capacity];
+        for (int i = 0; i < capacity; i++) {
+            lengths[i] = queues[i].size() + (active[i] != null ? 1 : 0);
+        }
+        return lengths;
+    }
+
+    /**
+     * Get total number of customers at this service point
+     */
+    public int getQueueLength() {
+        int total = 0;
+        for (LinkedList<QItem> queue : queues) {
+            total += queue.size();
+        }
+        for (Customer c : active) {
+            if (c != null) total++;
+        }
+        return total;
+    }
 }
