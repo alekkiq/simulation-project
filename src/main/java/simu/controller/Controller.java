@@ -95,6 +95,11 @@ public class Controller implements IControllerVtoM, IControllerMtoV {   // NEW
     }
 
     @Override
+    public void visualiseCustomerToCheckout(int id) {
+        Platform.runLater(() -> ((Visualisation)ui.getVisualisation()).moveCustomerToCheckout(id));
+    }
+
+    @Override
     public void visualiseCustomerExit(int id) {
         Platform.runLater(() -> ((Visualisation)ui.getVisualisation()).customerExit(id));
     }

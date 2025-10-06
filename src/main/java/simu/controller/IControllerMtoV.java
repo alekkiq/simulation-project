@@ -7,6 +7,7 @@ public interface IControllerMtoV {
     public void visualiseCustomer(int id);
     public void visualiseCustomerToMechanic(int id, int mechanicId);
     public void visualiseCustomerToWasher(int id, int washerId);
+    public void visualiseCustomerToCheckout(int id);
     public void visualiseCustomerExit(int id);
     public void updateServicePoints(int numMechanics, int numWashers);
     public void updateQueueLengths(int receptionQueue, int[] mechanicQueues, int[] washerQueues);

@@ -12,6 +12,7 @@ import java.util.Random;
 public class EngineMod extends Engine {
     // single-server service points
     private final ServicePoint reception;
+    private final ServicePoint checkout;
 
     // multiserver service points
     private final ServicePoint mechanic;
@@ -78,6 +79,7 @@ public class EngineMod extends Engine {
         this.controller= controller;
         this.rng       = new Random(options.getBaseRandomSeed());
         this.reception = buildReception(options);
+        this.checkout  = buildCheckout(options);
         this.mechanic  = buildMechanic(options);
         this.wash      = buildWash(options);
         this.arrivals  = buildArrivals(options);
@@ -98,6 +100,11 @@ public class EngineMod extends Engine {
     private ServicePoint buildReception(SimulationOptions options) {
         ContinuousGenerator gen = options.getReceptionService().toGen(this.nextSeed());
         return new ServicePoint(gen, this.eventList, EventType.RECEPTION_END);
+    }
+
+    private ServicePoint buildCheckout(SimulationOptions options) {
+        ContinuousGenerator gen = new distributions.Negexp(3.0, this.nextSeed()); // fixed mean
+        return new ServicePoint(gen, this.eventList, EventType.CHECKOUT_END);
     }
 
     private ServicePoint buildMechanic(SimulationOptions options) {
@@ -187,6 +194,10 @@ public class EngineMod extends Engine {
                 this.handleEnd(this.wash, EventType.WASH_END, now);
                 break;
             }
+            case CHECKOUT_END: {
+                this.handleEnd(this.checkout, EventType.CHECKOUT_END, now);
+                break;
+            }
             default: break;
         }
     }
@@ -238,28 +249,38 @@ public class EngineMod extends Engine {
                     c.tReceptionEnd = now;
                     if (c.needsMechanic()) {
                         c.tMechanicQIn = now;
-                        mechanic.addQueue(c);
-                        if (controller != null) controller.visualiseCustomerToMechanic(c.getId(), mechanic.getAssignedServer(c));
+                        this.mechanic.addQueue(c);
+                        if (this.controller != null) this.controller.visualiseCustomerToMechanic(c.getId(), this.mechanic.getAssignedServer(c));
                     } else if (c.needsWash()) {
                         c.tWashQIn = now;
-                        wash.addQueue(c);
-                        if (controller != null) controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
+                        this.wash.addQueue(c);
+                        if (this.controller != null) this.controller.visualiseCustomerToWasher(c.getId(), this.wash.getAssignedServer(c));
                     } else {
-                        c.tDeparture = now;
-                        if (controller != null) controller.visualiseCustomerExit(c.getId());
+                        this.checkout.addQueue(c);
+                        if (this.controller != null) {
+                            this.controller.visualiseCustomerToCheckout(c.getId());
+                        }
                     }
                     break;
                 case MECHANIC_END:
                     if (c.needsWash()) {
                         c.tWashQIn = now;
-                        wash.addQueue(c);
-                        if (controller != null) controller.visualiseCustomerToWasher(c.getId(), wash.getAssignedServer(c));
+                        this.wash.addQueue(c);
+                        if (this.controller != null) this.controller.visualiseCustomerToWasher(c.getId(), this.wash.getAssignedServer(c));
                     } else {
-                        c.tDeparture = now;
-                        if (controller != null) controller.visualiseCustomerExit(c.getId());
+                        this.checkout.addQueue(c);
+                        if (this.controller != null) {
+                            this.controller.visualiseCustomerToCheckout(c.getId());
+                        }
                     }
                     break;
                 case WASH_END:
+                    this.checkout.addQueue(c);
+                    if (this.controller != null) {
+                        this.controller.visualiseCustomerToCheckout(c.getId());
+                    }
+                    break;
+                case CHECKOUT_END:
                     c.tDeparture = now;
                     if (controller != null) controller.visualiseCustomerExit(c.getId());
                     break;
@@ -298,12 +319,16 @@ public class EngineMod extends Engine {
         this.startIfPossible(this.mechanic,  EventType.MECHANIC_END,  now);
         this.startIfPossible(this.wash,      EventType.WASH_END,      now);
 
+        // checkout
+        this.startIfPossible(this.checkout,  EventType.CHECKOUT_END,  now);
+
         // Update queue lengths in visualization
-        if (controller != null) {
-            int receptionQueueLength = reception.getQueueLength();
-            int[] mechanicQueues = mechanic.getQueueLengthsPerServer();
-            int[] washerQueues = wash.getQueueLengthsPerServer();
-            controller.updateQueueLengths(receptionQueueLength, mechanicQueues, washerQueues);
+        if (this.controller != null) {
+            int receptionQueueLength = this.reception.getQueueLength();
+            int[] mechanicQueues = this.mechanic.getQueueLengthsPerServer();
+            int[] washerQueues = this.wash.getQueueLengthsPerServer();
+            int[] checkoutQueues = this.checkout.getQueueLengthsPerServer();
+            this.controller.updateQueueLengths(receptionQueueLength, mechanicQueues, washerQueues);
         }
     }
 

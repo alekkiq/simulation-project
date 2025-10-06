@@ -57,6 +57,7 @@ public class Visualisation extends Canvas implements IVisualisation {
     private final double receptionX = 200;  // Moved reception point right to make room for queue
     private final double receptionY = 250;
     private final List<Customer> receptionQueue = new ArrayList<>();
+    private final List<Customer> checkoutQueue = new ArrayList<>();
 
     private final List<Position> mechanicPositions = new ArrayList<>();
     private final Map<Integer, List<Customer>> mechanicQueues = new HashMap<>();
@@ -89,6 +90,7 @@ public class Visualisation extends Canvas implements IVisualisation {
         receptionQueue.clear();
         mechanicQueues.values().forEach(List::clear);
         washerQueues.values().forEach(List::clear);
+        checkoutQueue.clear();
         clearDisplay();
     }
 
@@ -103,8 +105,6 @@ public class Visualisation extends Canvas implements IVisualisation {
             try (InputStream is = getClass().getResourceAsStream("/" + path)) {
                 if (is != null) {
                     carImages.add(new Image(is, CAR_DRAW_WIDTH, CAR_DRAW_HEIGHT, true, true));
-                } else {
-                    System.err.println("Sprite not found: " + path);
                 }
             } catch (Exception e) {
                 System.err.println("Failed to load sprite: " + path + " -> " + e.getMessage());
@@ -138,6 +138,7 @@ public class Visualisation extends Canvas implements IVisualisation {
      */
     private boolean isInAnyQueue(Customer c) {
         if (receptionQueue.contains(c)) return true;
+        if (checkoutQueue.contains(c)) return true;
         for (List<Customer> q : mechanicQueues.values()) if (q.contains(c)) return true;
         for (List<Customer> q : washerQueues.values()) if (q.contains(c)) return true;
         return false;
@@ -167,6 +168,7 @@ public class Visualisation extends Canvas implements IVisualisation {
 
         // Draw Exit
         drawServicePoint(exitX, exitY, EXIT_COLOR, "Exit");
+        drawQueue(checkoutQueue, exitX, exitY);
     }
 
     private void drawQueue(List<Customer> queue, double servicePointX, double servicePointY) {
@@ -365,6 +367,10 @@ public class Visualisation extends Canvas implements IVisualisation {
             String queueText = String.format("Queue: %d", washerQueues.get(i).size());
             gc.fillText(queueText, pos.x - 60, pos.y - HALF_STATION - 10);
         }
+
+        // Checkout / Exit queue
+        String checkoutText = String.format("Queue: %d", checkoutQueue.size());
+        gc.fillText(checkoutText, exitX - 60, exitY - HALF_STATION - 10);
     }
 
     private void drawCustomer(Customer customer, boolean cInService) {
@@ -472,12 +478,27 @@ public class Visualisation extends Canvas implements IVisualisation {
         }
     }
 
+    public void moveCustomerToCheckout(int id) {
+        Customer c = customers.get(id);
+
+        if (c == null) return;
+
+        receptionQueue.remove(c);
+        mechanicQueues.values().forEach(q -> q.remove(c));
+        washerQueues.values().forEach(q -> q.remove(c));
+
+        if (!checkoutQueue.contains(c)) checkoutQueue.add(c);
+
+        clearAndRedraw();
+    }
+
     public void customerExit(int id) {
         Customer customer = customers.get(id);
         if (customer != null) {
             receptionQueue.remove(customer);
             mechanicQueues.values().forEach(queue -> queue.remove(customer));
             washerQueues.values().forEach(queue -> queue.remove(customer));
+            checkoutQueue.remove(customer);
 
             customer.setPosition(exitX, exitY);
             clearAndRedraw();

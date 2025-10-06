@@ -15,5 +15,6 @@ public enum EventType implements IEventType {
 	MECHANIC_END,
 	WASH_START,
 	WASH_END,
-	DEPARTURE
+	DEPARTURE,
+	CHECKOUT_END
 }
