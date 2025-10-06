@@ -7,31 +7,51 @@ import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.image.Image;
 import javafx.scene.text.Text;
+
+import java.io.InputStream;
 import java.util.*;
 
 public class Visualisation extends Canvas implements IVisualisation {
     private final GraphicsContext gc;
     private final Map<Integer, Customer> customers = new HashMap<>();
-    private int nextCustomerId = 0;
 
     // Visual constants
-    private static final int CUSTOMER_SIZE = 20;
+    private static final int CUSTOMER_SIZE = 26;
+    private static final double CAR_DRAW_WIDTH = 34;
+    private static final double CAR_DRAW_HEIGHT = 28;
+    private static final double IN_SERVICE_SCALE = 1.5; // Make in-service cars larger
     private static final int STATION_SIZE = 100;
     private static final double HALF_STATION = STATION_SIZE / 2.0;
     private static final double HALF_CUSTOMER = CUSTOMER_SIZE / 2.0;
-    private static final double QUEUE_SPACING = 30;  // Increased spacing between customers
+    private static final double QUEUE_SPACING = CAR_DRAW_WIDTH + 12;  // Increased spacing between customers
+    private static final int MAX_VISIBLE_QUEUE = 4; // Max customers to show in queue -> the rest are shown in a counter
+    private static final double QUEUE_OVERFLOW_PADDING = 6;
 
     // Colors
-    private static final Color BACKGROUND_COLOR = Color.web("#f0f0f0");
-    private static final Color RECEPTION_COLOR = Color.web("#64B5F6");  // Material Blue
-    private static final Color MECHANIC_COLOR = Color.web("#81C784");   // Material Green
-    private static final Color WASHER_COLOR = Color.web("#E57373");     // Material Red
-    private static final Color EXIT_COLOR = Color.web("#90A4AE");       // Material Gray
-    private static final Color CUSTOMER_COLOR = Color.web("#FFA000");   // Material Amber
-    private static final Color CUSTOMER_POST_MECH_COLOR = Color.web("#000000"); // Black
-    private static final Color TEXT_COLOR = Color.web("#37474F");       // Dark Gray
-    private static final Color LINE_COLOR = Color.web("#BDBDBD");       // Light Gray
+    private static final Color BACKGROUND_COLOR = Color.web("#0e1116");
+    private static final Color RECEPTION_COLOR = Color.web("#3a3f44");
+    private static final Color MECHANIC_COLOR = Color.web("#CD4527");
+    private static final Color WASHER_COLOR = Color.web("#1E8074");
+    private static final Color EXIT_COLOR = Color.web("#151a20");
+    private static final Color CUSTOMER_COLOR = Color.web("#e6eaf0");
+    private static final Color CUSTOMER_POST_MECH_COLOR = Color.web("#CD4527");
+    private static final Color TEXT_COLOR = Color.web("#e6eaf0");
+    private static final Color LINE_COLOR = Color.web("#262c36");
+    private static final Color OVERFLOW_BG = Color.web("#151a20");
+    private static final Color OVERFLOW_BORDER = Color.web("#262c36");
+
+    // Car sprite fields
+    private static final String[] CAR_SPRITES = {
+        "img/coupe_blue.png",
+        "img/sedan_green.png",
+        "img/sport_red.png",
+        "img/van_white.png"
+    };
+    private final List<Image> carImages = new ArrayList<>();
+    private final Random rng = new Random();
+
 
     // Service point positions and queues
     private final double receptionX = 200;  // Moved reception point right to make room for queue
@@ -60,6 +80,7 @@ public class Visualisation extends Canvas implements IVisualisation {
     public Visualisation(int w, int h) {
         super(w, h);
         gc = this.getGraphicsContext2D();
+        loadCarSprites();
         clearDisplay();
     }
 
@@ -77,9 +98,24 @@ public class Visualisation extends Canvas implements IVisualisation {
         gc.setLineWidth(2);
     }
 
+    private void loadCarSprites() {
+        for (String path : CAR_SPRITES) {
+            try (InputStream is = getClass().getResourceAsStream("/" + path)) {
+                if (is != null) {
+                    carImages.add(new Image(is, CAR_DRAW_WIDTH, CAR_DRAW_HEIGHT, true, true));
+                } else {
+                    System.err.println("Sprite not found: " + path);
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load sprite: " + path + " -> " + e.getMessage());
+            }
+        }
+    }
+
     @Override
     public void newCustomer(int id) {
-        Customer customer = new Customer(id, receptionX, receptionY);
+        Image sprite = carImages.isEmpty() ? null : carImages.get(rng.nextInt(carImages.size()));
+        Customer customer = new Customer(id, receptionX, receptionY, sprite);
         customers.put(id, customer);
         receptionQueue.add(customer);
         clearAndRedraw();
@@ -92,6 +128,19 @@ public class Visualisation extends Canvas implements IVisualisation {
         gc.fillRect(0, 0, this.getWidth(), this.getHeight());
         drawServicePoints();
         drawQueueInfo();
+    }
+
+    /**
+     * Helper to check if a customer is in any queue
+     * Fixes a bug where a customer could be drawn multiple times
+     * @param c Customer to check
+     * @return true if in any queue, false otherwise
+     */
+    private boolean isInAnyQueue(Customer c) {
+        if (receptionQueue.contains(c)) return true;
+        for (List<Customer> q : mechanicQueues.values()) if (q.contains(c)) return true;
+        for (List<Customer> q : washerQueues.values()) if (q.contains(c)) return true;
+        return false;
     }
 
     private void drawServicePoints() {
@@ -121,19 +170,58 @@ public class Visualisation extends Canvas implements IVisualisation {
     }
 
     private void drawQueue(List<Customer> queue, double servicePointX, double servicePointY) {
-        if (queue == null) return;
+        if (queue == null || queue.isEmpty()) return;
 
-        // Position queue to the left of the service point
+        // Customer at index 0 = currently in service (draw centered on station)
+        Customer inService = queue.get(0);
+        inService.setPosition(servicePointX, servicePointY);
+        drawCustomer(inService, true);
+
+        int waiting = queue.size() - 1;
+        if (waiting <= 0) return;
+
+        int visibleWaiting = Math.min(waiting, MAX_VISIBLE_QUEUE);
         double queueStartX = servicePointX - (STATION_SIZE / 2.0 + QUEUE_SPACING);
-        double queueY = servicePointY; // Same Y level as service point
 
-        // Draw customers in queue
-        for (int i = 0; i < queue.size(); i++) {
-            Customer customer = queue.get(i);
+        // Draw waiting customers to the left
+        for (int i = 0; i < visibleWaiting; i++) {
+            Customer c = queue.get(i + 1);
             double x = queueStartX - (i * QUEUE_SPACING);
-            customer.setPosition(x, queueY);
-            drawCustomer(customer);
+            c.setPosition(x, servicePointY);
+            drawCustomer(c, false);
         }
+
+        // Overflow badge if more are hidden
+        if (waiting > MAX_VISIBLE_QUEUE) {
+            int hidden = waiting - MAX_VISIBLE_QUEUE;
+            double nextSlotCenter = queueStartX - (visibleWaiting * QUEUE_SPACING);
+            double badgeX = nextSlotCenter - 8;
+            drawOverflowBadge(badgeX, servicePointY, hidden);
+        }
+    }
+
+    private void drawOverflowBadge(double centerX, double centerY, int count) {
+        String text = "(+" + count + ")";
+        gc.setFont(Font.font("System", FontWeight.BOLD, 14));
+
+        double textWidth = gc.getFont().getSize() * text.length() * 0.52;
+        double textHeight = gc.getFont().getSize() + 4;
+
+        double w = textWidth + QUEUE_OVERFLOW_PADDING * 2;
+        double h = textHeight + 2;
+        double x = centerX - w / 2;
+        double y = centerY - h / 2;
+
+        gc.setFill(OVERFLOW_BG);
+        gc.fillRoundRect(x, y, w, h, 10, 10);
+
+        gc.setStroke(OVERFLOW_BORDER);
+        gc.setLineWidth(1);
+        gc.strokeRoundRect(x, y, w, h, 10, 10);
+
+        // Text
+        gc.setFill(TEXT_COLOR);
+        gc.fillText(text, centerX - textWidth / 2, centerY + (gc.getFont().getSize() / 3.0));
     }
 
     private void drawConnectingLines() {
@@ -279,46 +367,68 @@ public class Visualisation extends Canvas implements IVisualisation {
         }
     }
 
-    private void drawCustomer(Customer customer) {
+    private void drawCustomer(Customer customer, boolean cInService) {
         double x = customer.getX();
         double y = customer.getY();
+        Image sprite = customer.getImage();
+        double scale = cInService ? IN_SERVICE_SCALE : 1.0;
 
-        // Draw shadow
+        if (sprite != null) {
+            double w = CAR_DRAW_WIDTH * scale;
+            double h = CAR_DRAW_HEIGHT * scale;
+
+            // Shadow
+            gc.setFill(Color.color(0, 0, 0, 0.35));
+            gc.fillOval(x - w / 2, y - h / 2 + 4, w, h);
+
+            // Car sprite
+            gc.drawImage(sprite, x - w / 2, y - h / 2, w, h);
+
+            // Accent border ONLY if mechanic -> washer path
+            if (customer.afterMechanicInWasher) {
+                gc.setStroke(CUSTOMER_POST_MECH_COLOR);
+                gc.setLineWidth(3);
+                gc.strokeRoundRect(
+                    x - w / 2 - 2,
+                    y - h / 2 - 2,
+                    w + 4,
+                    h + 4,
+                    10 * scale,
+                    10 * scale
+                );
+            }
+            return;
+        }
+
+        // Fallback circle
+        double r = (CUSTOMER_SIZE * scale) / 2.0;
         gc.setFill(Color.color(0, 0, 0, 0.3));
-        gc.fillOval(x - HALF_CUSTOMER + 2, y - HALF_CUSTOMER + 2,
-                    CUSTOMER_SIZE, CUSTOMER_SIZE);
+        gc.fillOval(x - r + 2, y - r + 2, r * 2, r * 2);
 
-        Color base = (customer.afterMechanicInWasher)
-                ? CUSTOMER_POST_MECH_COLOR
-                : CUSTOMER_COLOR;
-
-        // Create gradient for customer
+        Color base = customer.afterMechanicInWasher ? CUSTOMER_POST_MECH_COLOR : CUSTOMER_COLOR;
         Stop[] stops = new Stop[]{
-            new Stop(0, base.brighter()),
-            new Stop(1, base.darker())
+                new Stop(0, base.brighter()),
+                new Stop(1, base.darker())
         };
         RadialGradient gradient = new RadialGradient(
-            0, 0, x, y, HALF_CUSTOMER,
-            false, CycleMethod.NO_CYCLE, stops
+                0, 0, x, y, r,
+                false, CycleMethod.NO_CYCLE, stops
         );
-
-        // Draw customer
         gc.setFill(gradient);
-        gc.fillOval(x - HALF_CUSTOMER, y - HALF_CUSTOMER,
-                    CUSTOMER_SIZE, CUSTOMER_SIZE);
+        gc.fillOval(x - r, y - r, r * 2, r * 2);
 
-        // Draw border
-        gc.setStroke(CUSTOMER_COLOR.darker());
+        gc.setStroke(base.darker());
         gc.setLineWidth(1.5);
-        gc.strokeOval(x - HALF_CUSTOMER, y - HALF_CUSTOMER,
-                      CUSTOMER_SIZE, CUSTOMER_SIZE);
+        gc.strokeOval(x - r, y - r, r * 2, r * 2);
     }
 
     private void clearAndRedraw() {
-        clearDisplay();
-        // Draw all customers in their current positions
-        for (Customer customer : customers.values()) {
-            drawCustomer(customer);
+        clearDisplay(); // draws service points + queues (which already draw queued customers)
+        for (Customer c : customers.values()) {
+            if (!isInAnyQueue(c)) {
+                // e.g. car at exit (just before removal) or any future free-floating states
+                drawCustomer(c, false);
+            }
         }
     }
 
