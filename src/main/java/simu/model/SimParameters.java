@@ -9,7 +9,7 @@ import simu.config.SimulationOptions;
 public final class SimParameters {
     // --- Core ---
     private final DoubleProperty  simDuration  = new SimpleDoubleProperty(1_000.0);
-    private final IntegerProperty uiDelayMs    = new SimpleIntegerProperty(100);
+    private final IntegerProperty uiDelayMs    = new SimpleIntegerProperty(200);
     private final IntegerProperty numMechanics = new SimpleIntegerProperty(2);
     private final IntegerProperty numWashers   = new SimpleIntegerProperty(1);
 

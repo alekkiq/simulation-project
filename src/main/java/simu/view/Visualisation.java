@@ -22,7 +22,7 @@ public class Visualisation extends Canvas implements IVisualisation {
     private static final double CAR_DRAW_WIDTH = 34;
     private static final double CAR_DRAW_HEIGHT = 28;
     private static final double IN_SERVICE_SCALE = 1.5; // Make in-service cars larger
-    private static final int STATION_SIZE = 100;
+    private static final int STATION_SIZE = 80;
     private static final double HALF_STATION = STATION_SIZE / 2.0;
     private static final double HALF_CUSTOMER = CUSTOMER_SIZE / 2.0;
     private static final double QUEUE_SPACING = CAR_DRAW_WIDTH + 12;  // Increased spacing between customers
@@ -54,8 +54,17 @@ public class Visualisation extends Canvas implements IVisualisation {
 
 
     // Service point positions and queues
-    private final double receptionX = 200;  // Moved reception point right to make room for queue
+    private static final double CANVAS_SHIFT_X = 80;
+    private double receptionX = 200 + CANVAS_SHIFT_X;  // Moved reception point right to make room for queue
     private final double receptionY = 250;
+    private double exitX = 1000  + CANVAS_SHIFT_X;      // Moved exit point right to make room
+    private final double exitY = 250;
+
+    // General layout constants
+    private static final double BASE_EDGE_GAP = 160;
+    private static final double LEFT_MARGIN = 100;
+    private static final double RIGHT_MARGIN = 10;
+
     private final List<Customer> receptionQueue = new ArrayList<>();
     private final List<Customer> checkoutQueue = new ArrayList<>();
 
@@ -65,8 +74,6 @@ public class Visualisation extends Canvas implements IVisualisation {
     private final List<Position> washerPositions = new ArrayList<>();
     private final Map<Integer, List<Customer>> washerQueues = new HashMap<>();
 
-    private final double exitX = 1000;      // Moved exit point right to make room
-    private final double exitY = 250;
 
     // Position helper class
     private static class Position {
@@ -167,7 +174,7 @@ public class Visualisation extends Canvas implements IVisualisation {
         }
 
         // Draw Exit
-        drawServicePoint(exitX, exitY, EXIT_COLOR, "Exit");
+        drawServicePoint(exitX, exitY, EXIT_COLOR, "Checkout");
         drawQueue(checkoutQueue, exitX, exitY);
     }
 
@@ -240,6 +247,16 @@ public class Visualisation extends Canvas implements IVisualisation {
         for (Position washer : washerPositions) {
             drawArrowLine(receptionX + HALF_STATION, receptionY,
                          washer.x - HALF_STATION, washer.y);
+        }
+
+        // Mechanics -> Washers
+        for (Position mechanic : mechanicPositions) {
+            for (Position washer : washerPositions) {
+                drawArrowLine(
+                        mechanic.x, mechanic.y + HALF_STATION,
+                        washer.x, washer.y - HALF_STATION
+                );
+            }
         }
 
         // Draw lines to exit
@@ -323,25 +340,45 @@ public class Visualisation extends Canvas implements IVisualisation {
         mechanicQueues.clear();
         washerQueues.clear();
 
-        double startX = 300;
-        double spacing = Math.max(220, (getWidth() - startX - 100) / Math.max(numMechanics, numWashers)); // Increased min spacing
-        double offset = 40; // Amount to move the first mechanic/washer to the right
+        int maxServers = Math.max(numMechanics, numWashers);
 
-        // Position mechanics in top row
+        // Keep reception fully visible (left margin for its full queue footprint)
+        double neededLeft = leftQueueFootprint() + LEFT_MARGIN;
+        if (receptionX < neededLeft) receptionX = neededLeft;
+
+        // Internal spacing between service points (large enough so their left queues don't overlap)
+        double minSpacing = computeMinCenterSpacing();
+        double spacing = (maxServers <= 1) ? 0 : minSpacing;
+
+        // Small fixed symmetric edge gap (Reception -> first, last -> Exit)
+        double startX = receptionX + BASE_EDGE_GAP;
+
+        // Mechanics
         for (int i = 0; i < numMechanics; i++) {
-            double x = startX + (i * spacing);
-            if (i == 0) x += offset; // Move first mechanic to the right
+            double x = startX + i * spacing;
             mechanicPositions.add(new Position(x, 150));
             mechanicQueues.put(i, new ArrayList<>());
         }
 
-        // Position washers in bottom row
+        // Washers
         for (int i = 0; i < numWashers; i++) {
-            double x = startX + (i * spacing);
-            if (i == 0) x += offset; // Move first washer to the right
+            double x = startX + i * spacing;
             washerPositions.add(new Position(x, 350));
             washerQueues.put(i, new ArrayList<>());
         }
+
+        double lastServerX = (maxServers > 0) ? (startX + (maxServers - 1) * spacing) : startX;
+
+        // Symmetric small gap to exit
+        exitX = lastServerX + BASE_EDGE_GAP;
+
+        // Ensure canvas wide enough so exit queue (including overflow) is visible
+        double exitRightFootprint = HALF_STATION + leftQueueFootprint();
+        double requiredWidth = Math.max(
+                exitX + exitRightFootprint + RIGHT_MARGIN,
+                receptionX + HALF_STATION + RIGHT_MARGIN
+        );
+        if (getWidth() < requiredWidth) setWidth(requiredWidth);
 
         clearDisplay();
     }
@@ -426,6 +463,25 @@ public class Visualisation extends Canvas implements IVisualisation {
         gc.setStroke(base.darker());
         gc.setLineWidth(1.5);
         gc.strokeOval(x - r, y - r, r * 2, r * 2);
+    }
+
+    private double computeMinCenterSpacing() {
+        // Queue extends left: QUEUE_SPACING * MAX_VISIBLE_QUEUE + half car width
+        double queueExtent = (QUEUE_SPACING * MAX_VISIBLE_QUEUE) + (CAR_DRAW_WIDTH / 2.0);
+        double margin = 20;
+        double minSpacing = STATION_SIZE + queueExtent + margin; // ensures no overlap
+        return Math.max(minSpacing, 320); // keep a visual floor
+    }
+
+    private double leftQueueFootprint() {
+        // Station half + one in-service (center) not needed (we start from center),
+        // visible queue cars: MAX_VISIBLE_QUEUE each shifted QUEUE_SPACING starting one slot left of station edge,
+        // plus one extra slot for overflow badge, plus half car for badge width approximation.
+        return (STATION_SIZE / 2.0)
+                + (QUEUE_SPACING * MAX_VISIBLE_QUEUE)
+                + QUEUE_SPACING
+                + (CAR_DRAW_WIDTH / 2.0)
+                + 8;
     }
 
     private void clearAndRedraw() {

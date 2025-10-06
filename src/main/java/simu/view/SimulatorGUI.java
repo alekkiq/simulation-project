@@ -81,7 +81,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
     @Override
     public void start(Stage stage) {
         // Create visualization but don't show it yet
-        visualisation = new Visualisation(1200, 800); // Increased canvas size
+        visualisation = new Visualisation(1400, 600);
 
         // --- Spinners with explicit factories ---
         simulationDurationSpinner.setValueFactory(
@@ -256,7 +256,7 @@ public class SimulatorGUI extends Application implements ISimulatorUI {
             // add toolbar first, then canvas
             visualRoot.getChildren().addAll(toolbar, visualisation);
 
-            Scene visualScene = new Scene(visualRoot, 1200, 900);
+            Scene visualScene = new Scene(visualRoot, 1400, 600);
             visualScene.getStylesheets().add("styles.css");
             visualizationStage.setScene(visualScene);
             visualizationStage.show();

@@ -7,6 +7,7 @@
 
 .label {
     -fx-text-fill: #e6eaf0;
+    -fx-font-size: 16px;
 }
 
 
@@ -33,7 +34,7 @@
 
 /* --- Controls --- */
 .text-field, .spinner, .combo-box, .button, .slider, .label, .check-box {
-    -fx-font-size: 13px;
+    -fx-font-size: 16px;
 }
 
 .spinner, .combo-box-base, .text-field {
@@ -118,12 +119,12 @@
     -fx-border-radius: 8;
     -fx-font-family: monospace;
     -fx-text-fill: #dce3ee;
-    -fx-font-size: 12px;
+    -fx-font-size: 14px;
 }
 
 /* --- Section headers --- */
 .section-header {
-    -fx-font-size: 20px;              /* bigger than before */
+    -fx-font-size: 22px;              /* bigger than before */
     -fx-font-weight: 900;             /* extra bold */
     -fx-text-fill: #ffffff;           /* pure white */
     -fx-padding: 18 0 8 0;
@@ -150,7 +151,7 @@
 }
 
 .dialog-heading {
-    -fx-font-size: 22px;
+    -fx-font-size: 24px;
     -fx-font-weight: 900;
     -fx-text-fill: #ffffff;
     -fx-padding: 16 16 10 16;
