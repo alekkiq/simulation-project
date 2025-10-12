@@ -88,6 +88,14 @@ public class SimulationData {
         this.washAvgTotalPerServer = washAvgTotalPerServer;
     }
 
+    /**
+     * Create a SimulationData object from the given ServicePoints and current time.
+     * @param now current simulation time
+     * @param reception the reception service point
+     * @param mechanic the mechanic service point
+     * @param wash the wash service point
+     * @return a SimulationData object
+     */
     public static SimulationData from(double now, ServicePoint reception, ServicePoint mechanic, ServicePoint wash) {
         int rCap = reception.getCapacity();
         int rServed = reception.getServedCount();

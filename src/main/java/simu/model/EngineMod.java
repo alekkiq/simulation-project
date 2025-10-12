@@ -92,21 +92,43 @@ public class EngineMod extends Engine {
 
     // ---------- Initialization ----------
 
+    /**
+     * Build the arrival process based on the given options.
+     * @param options Simulation options containing the arrival distribution and parameters
+     * @return Configured arrival process
+     */
     private ArrivalProcess buildArrivals(SimulationOptions options) {
         ContinuousGenerator gen = options.getInterArrival().toGen(this.nextSeed());
         return new ArrivalProcess(gen, this.eventList, EventType.ARRIVAL);
     }
 
+    /**
+     * Build the reception service point based on the given options.
+     * @param options Simulation options containing the reception service distribution and parameters
+     * @return Configured reception service point
+     */
     private ServicePoint buildReception(SimulationOptions options) {
         ContinuousGenerator gen = options.getReceptionService().toGen(this.nextSeed());
         return new ServicePoint(gen, this.eventList, EventType.RECEPTION_END);
     }
 
+    /**
+     * Build the checkout service point with a fixed exponential distribution.
+     * This is hardcoded for simplicity, but could be made configurable if needed.
+     * @param options Simulation options (not used here)
+     * @return Configured checkout service point
+     */
     private ServicePoint buildCheckout(SimulationOptions options) {
         ContinuousGenerator gen = new distributions.Negexp(3.0, this.nextSeed()); // fixed mean
         return new ServicePoint(gen, this.eventList, EventType.CHECKOUT_END);
     }
 
+    /**
+     * Build the mechanic service point based on the given options.
+     * Supports multiple servers with individual speed factors.
+     * @param options Simulation options containing the mechanic service distribution, number of servers, and speed factors
+     * @return Configured mechanic service point
+     */
     private ServicePoint buildMechanic(SimulationOptions options) {
         int n = options.getMechanicServers();
         double[] speeds = options.getMechanicSpeedFactors();
@@ -120,6 +142,12 @@ public class EngineMod extends Engine {
         return new ServicePoint(gens, this.eventList, EventType.MECHANIC_END);
     }
 
+    /**
+     * Build the wash service point based on the given options.
+     * Supports multiple servers with individual speed factors and different wash programs.
+     * @param options Simulation options containing the wash service distribution, number of servers, and speed factors
+     * @return Configured wash service point
+     */
     private ServicePoint buildWash(SimulationOptions options) {
         int n = options.getWashServers();
         double[] speeds = options.getWashSpeedFactors();
@@ -145,6 +173,10 @@ public class EngineMod extends Engine {
         );
     }
 
+    /**
+     * Generate the next seed for random number generators based on the base RNG.
+     * @return Next seed value
+     */
     private long nextSeed() {
         return Integer.toUnsignedLong(this.rng.nextInt());
     }

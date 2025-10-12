@@ -127,29 +127,4 @@ public class Customer {
 	public void setWashProgram(WashProgram washProgram) {
 		this.washProgram = washProgram;
 	}
-
-	/**
-	 * Indicate whether all needs of the customer have been served
-	 * @return logical value indicating whether all needs of the customer have been served
-	 */
-	public boolean allDone() {
-		boolean mechDone = !this.needsMechanic || (this.tMechanicEnd > 0);
-		boolean washDone = !this.needsWash || (this.tWashEnd > 0);
-		boolean receptionDone = (this.tReceptionEnd > 0);
-		return mechDone && washDone && receptionDone;
-	}
-
-	/**
-	 * Report the measured variables of the customer. In this case to the diagnostic output.
-	 */
-	public void reportResults() {
-		Trace.out(Trace.Level.INFO, "\nCustomer " + this.id + " ready! ");
-		Trace.out(Trace.Level.INFO, "Customer "   + this.id + " arrived: " + this.arrivalTime);
-		Trace.out(Trace.Level.INFO,"Customer "    + this.id + " removed: " + this.removalTime);
-		Trace.out(Trace.Level.INFO,"Customer "    + this.id + " stayed: "  + (this.removalTime - this.arrivalTime));
-
-		sum += (this.removalTime - this.arrivalTime);
-		double mean = sum/id;
-		System.out.println("Current mean of the customer service times " + mean);
-	}
 }

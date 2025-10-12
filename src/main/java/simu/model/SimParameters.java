@@ -44,12 +44,23 @@ public final class SimParameters {
         ensureSize(washerSpeeds,   numWashers.get(),   1.0);
     }
 
+    /**
+     * Convert Number to safe int size (non-null, non-negative)
+     * @param n Number (may be null, negative)
+     * @return int >= 0
+     */
     private static int safeSize(Number n) {
         int v = n == null ? 0 : n.intValue();
         return Math.max(0, v);
     }
 
-    /** Grow/shrink list to 'size', filling new entries with properties at 'def' */
+    /**
+     * Ensure the given list has exactly the given size, adding or removing elements as needed.
+     * New elements are initialized to the given default value.
+     * @param list the list to resize
+     * @param size the desired size (non-negative)
+     * @param def the default value for new elements
+     */
     private static void ensureSize(ObservableList<DoubleProperty> list, int size, double def) {
         // grow
         while (list.size() < size) list.add(new SimpleDoubleProperty(def));
@@ -57,6 +68,10 @@ public final class SimParameters {
         while (list.size() > size) list.remove(list.size() - 1);
     }
 
+    /**
+     * Create a SimulationOptions config object from the current parameters.
+     * @return a SimulationOptions object
+     */
     public SimulationOptions toConfig() {
         SimulationOptions o = new SimulationOptions();
         o.setSimulationDuration(getSimDuration());

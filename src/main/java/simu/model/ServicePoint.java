@@ -4,20 +4,6 @@ import distributions.ContinuousGenerator;
 import simu.framework.*;
 import java.util.LinkedList;
 
-/**
- * Service Point implements the functionalities, calculations and reporting.
- *
- * TODO: This must be modified to actual implementation. Things to be added:
- *     - functionalities of the service point
- *     - measurement variables added
- *     - getters to obtain measurement values
- *
- * Service point has a queue where customers are waiting to be serviced.
- * Service point simulated the servicing time using the given random number generator which
- * generated the given event (customer serviced) for that time.
- *
- * Service point collects measurement parameters.
- */
 public class ServicePoint {
 
 	// ---------- Nested types ----------
@@ -35,13 +21,17 @@ public class ServicePoint {
 
 	/**
 	 * Immutable DTO describing a service start decision.
-	 * - Created by {@link #tryStart(double)} when a customer is dequeued and assigned to a free server.
-	 * - Consumed by the engine to annotate the customer and for optional logging.
-	 * Semantics:
-	 * - `customer`: the customer entering service now.
-	 * - `serviceTime`: sampled duration assigned to this service instance.
-	 * - `endTime`: absolute time when the service will finish (and an end-event will fire).
-	 * - `serverId`: zero-based id of the server that took the customer.
+	 * <p>
+	 * Created by {@link #tryStart(double)} when a customer is dequeued and assigned to a free server.
+	 * Consumed by the engine to annotate the customer and for optional logging.
+	 * </p>
+	 * <h4>Semantics</h4>
+	 * <ul>
+	 *   <li>{@code customer}: the customer entering service now.</li>
+	 *   <li>{@code serviceTime}: sampled duration assigned to this service instance.</li>
+	 *   <li>{@code endTime}: absolute time when the service will finish (and an end-event will fire).</li>
+	 *   <li>{@code serverId}: zero-based id of the server that took the customer.</li>
+	 * </ul>
 	 */
 	public static class StartInfo {
 		public final Customer customer;
@@ -59,13 +49,17 @@ public class ServicePoint {
 
 	/**
 	 * Immutable DTO describing a completed service.
-	 * - Created by {@link #finishService(double)} when the next finishing service is popped.
-	 * - Consumed by the engine to route the customer to the next stage and for logging.
-	 * Semantics:
-	 * - `customer`: the customer whose service just finished.
-	 * - `serverId`: zero-based id of the server that completed the service.
-	 * - `startTime`: absolute time when this service started.
-	 * - `endTime`: absolute time when this service finished.
+	 * <p>
+	 * Created by {@link #finishService(double)} when the next finishing service is popped.
+	 * Consumed by the engine to route the customer to the next stage and for logging.
+	 * </p>
+	 * <h4>Semantics</h4>
+	 * <ul>
+	 *   <li>{@code customer}: the customer whose service just finished.</li>
+	 *   <li>{@code serverId}: zero-based id of the server that completed the service.</li>
+	 *   <li>{@code startTime}: absolute time when this service started.</li>
+	 *   <li>{@code endTime}: absolute time when this service finished.</li>
+	 * </ul>
 	 */
 	public static class EndInfo {
 		public final Customer customer;
@@ -192,12 +186,23 @@ public class ServicePoint {
 
 	// ---------- Queue operations ----------
 
+	/**
+	 * Add a customer to the queue of the server with the shortest estimated total processing time.
+	 * This is calculated as (queue length * average service time + current service remaining time).
+	 * @param c the customer to enqueue
+	 */
 	public void addQueue(Customer c) {
 		double now = Clock.getInstance().getClock();
 		int sid = this.selectShortestQueueServer();
 		this.queues[sid].addLast(new QItem(c, now));
 	}
 
+	/**
+	 * Select the server whose queue has the shortest estimated total processing time.
+	 * This is calculated as (queue length * average service time + current service remaining time).
+	 * @see #getAverageServiceTime()
+	 * @return index of the selected server
+	 */
 	private int selectShortestQueueServer() {
 		// Find server with shortest total time (queue length * average service time + current service remaining time)
 		int best = 0;
@@ -224,6 +229,14 @@ public class ServicePoint {
 		return best;
 	}
 
+	/**
+	 * Try to start a new service now.
+	 * If a server is idle and has a waiting customer, the customer is dequeued,
+	 * assigned to the server, and a service end event is scheduled.
+	 * If no server is free or no customers are waiting, returns null.
+	 * @param now current simulation time
+	 * @return info about the started service, or null if none was started
+	 */
 	public StartInfo tryStart(double now) {
 		// find an idle server that has a waiting customer
 		for (int sid = 0; sid < this.capacity; sid++) {
